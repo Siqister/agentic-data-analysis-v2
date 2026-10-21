@@ -73,7 +73,7 @@ All tests live in [known_answers.md](known_answers.md), one section per test:
 ```yaml
 indicator: housing_cost_burden_pct
 geography: cle_city
-unit: "3916000"                  # unit code (text)
+unit: "Cleveland"                # the unit's id_field value (text), e.g. NAME for cle_city, GEOID for Census units
 expected: 0.000                  # published value (placeholder)
 expected_moe: 0.000              # (optional) published margin of error
 tolerance: within_moe            # exact | absolute 0.5 | relative 2% | within_moe
@@ -83,7 +83,7 @@ source: ACS 2019–2023 5-year, B25070 + B25091, Cleveland city — https://data
 Optional note, e.g. "Ours is aggregated from block groups, so a small gap is expected."
 ````
 
-The heading gives the test ID (`kat_001`, `kat_002`, …).
+The heading gives the test ID (`kat_001`, `kat_002`, …). The YAML block is the contract: `lib/known_answers.py` reads only that. The prose under it is for people.
 
 ### Tolerance
 

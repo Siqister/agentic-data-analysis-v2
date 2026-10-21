@@ -20,14 +20,15 @@ Specs follow the **Open Knowledge Format (OKF) v0.2** ([architecture.md § 3](ar
 
 ## Rules
 
-1. **Specs are the source of truth.** Compute only what a spec describes. If a spec is unclear, incomplete, or seems wrong, stop and ask the expert. Never guess.
-2. **Pull only what a spec names.** Data may come only from a Resource or Geography that has a spec, and only the specific datasets and fields named in an Indicator or Crosswalk. If you think more data is needed, tell the expert and suggest sources. Never write a Resource spec on your own.
-3. **Do not interpret.** Produce indicators and maps, not findings. Don't describe, rank, or characterize places. Titles describe what is measured, never what it shows.
-4. **Leave pinned code alone.** Regenerate compiled code only when its spec has changed or the expert asks.
-5. **Use the shared helpers.** Crosswalks, margin-of-error math, rates, point aggregation, and maps go through `lib/`. Don't reimplement them. Changes to `lib/` need the expert's review.
-6. **Only the expert approves.** New specs start as `status: draft`. Only the expert sets `stable` or marks code as reviewed.
-7. **Protect secrets and data.** Never commit `.env` or `data/`. Never print or log an API key.
-8. **Keep the roadmap current.** Before ending a session, or when stopping partway through, update [roadmap.md](roadmap.md).
+1. **Every request for a table, map, or measure goes through the runner.** First run `uv run python -m lib.runner list` and match the request to one spec ID. If several match, ask. If none match, say it isn't available and list what is. Then run `uv run python -m lib.runner run <id>`. Never write analysis, fetching, or mapping code outside the compile step, even if the request doesn't mention specs.
+2. **Specs are the source of truth.** Compute only what a spec describes. If a spec is unclear, incomplete, or seems wrong, stop and ask the expert. Never guess.
+3. **Pull only what a spec names.** Data may come only from a Resource or Geography that has a spec, and only the specific datasets and fields named in an Indicator or Crosswalk. If you think more data is needed, tell the expert and suggest sources. Never write a Resource spec on your own.
+4. **Do not interpret.** Produce indicators and maps, not findings. Don't describe, rank, or characterize places. Titles describe what is measured, never what it shows.
+5. **Leave pinned code alone.** Regenerate compiled code only when its spec has changed or the expert asks.
+6. **Use the shared helpers.** Crosswalks, margin-of-error math, rates, point aggregation, and maps go through `lib/`. Don't reimplement them. Changes to `lib/` need the expert's review.
+7. **Only the expert approves.** New specs start as `status: draft`. Only the expert sets `stable` or marks code as reviewed.
+8. **Protect secrets and data.** Never commit `.env` or `data/`. Never print or log an API key.
+9. **Keep the roadmap current.** Before ending a session, or when stopping partway through, update [roadmap.md](roadmap.md).
 
 ## Two modes
 

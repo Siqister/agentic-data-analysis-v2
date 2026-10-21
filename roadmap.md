@@ -104,7 +104,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/01-bg-population`
 
-**Status:** 🛑 **At Stop C** (2026-10-21). Tasks 6–8 done: `lib/` built, `pipeline/indicators/population_count.py` compiled, validation, `kat_001` and `inv_001` pass, all three outputs produced with manifests. Waiting for the expert to review outputs, test results and code (see [Stop C review](#stop-c-review)). Then task 9 (retro).
+**Status:** ✅ Stop C passed 2026-10-21: the expert reviewed outputs, test results and code. Next: task 9 (retro), in Claude Code. The expert still adds the `verified` line to `pipeline/indicators/population_count.py` and sets the six specs to `stable` (Definition of done).
 
 **Exercises (capability checklist):** Python environment, git, `.env` · spec validator · snapshots and manifests · staleness detection · known-answer tests · run mode · API resource · local file resource · geography from Census boundary files · geography from a local file · `within` · count with margin of error · reliability flag · `nested` · choropleth with tooltips
 
@@ -198,7 +198,14 @@ Applied 1–6 on 2026-10-21 (architecture.md §§ 2, 4.2, 4.3, 7, 10, 11, 12; `t
 - Changes to `lib/` don't mark results stale (only specs, compiled code and data do). Use `--force` in author mode after a `lib/` change. Decide whether `lib/` hashes belong in manifests.
 - `crosswalk.build` handles only `nested` with `from.within == to` and a single target unit; other cases raise until a later chunk generalizes it.
 - Runner commands: `uv run python -m lib.runner list | status | run <id> [--mode author|run] [--force]`; `uv run python -m lib.validate [--network]`.
+- `outputs/` is not tracked in git (expert's decision, 2026-10-21); added to `.gitignore` and architecture.md §§ 11–12.
 - Bug caught on first run: `cle_city` uses `NAME` for both `id_field` and `name_field`; the loader originally renamed the column before reading the name. Fixed.
+
+- **Prompt routing (expert's own test at Stop C).** "visualize population by block group based on the spec map_population_count__bg_2020" went through the runner. "map the population count by block group in Cleveland" ignored the specs and recomputed everything ad hoc, leaving no files in the project. Cause: the invocation rule is in architecture.md only; nothing in `AGENTS.md`'s Rules makes requests go through `lib.runner`. *Agent needed correction on this.* Options: (a) add a rule 0 to `AGENTS.md` ("every request for a table, map, or measure goes through the runner: `lib.runner list`, match one ID, ask if several, say not available if none; never compute ad hoc"); (b) prototype the distribution skill now in `.claude/skills/<name>/SKILL.md`, with that rule and a description that matches plain-language requests. (a) moves into (b) at packaging time. The expert decides in the retro.
+- **`inv_002` to add.** Prompt: "Map the population count by block group in Cleveland." Expected: `map_population_count__bg_2020`, run through the runner, no ad-hoc code. Retest `inv_001` and `inv_002` in a fresh session every chunk.
+- **`inv_001` as recorded tested the runner, not the agent.** It ran `lib.runner run median_household_income` directly. An invocation test must start from the plain prompt, in a fresh session.
+- **Edits to `stable` specs.** Nothing resets `status` when a spec is edited, so an agent edit to a `stable` Visualization or Geography would rerun silently and keep the `stable` label (conflicts with AGENTS.md rule 6). Option: any agent edit to a `stable` spec sets it back to `draft`. Decide before marking chunk 1's specs stable.
+- **Review load.** `lib/` came out at ≈1,300 lines in 12 modules. Suggested review focus: `moe.py`, `geography.py`, `census.py`, `crosswalk.py`, and the compiled Indicator; tests cover the rest.
 
 #### Tasks
 
@@ -259,3 +266,5 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-21 | Claude Code | Expert answered Stop B questions and supplied task 2 inputs (city boundary source; `kat_001` confirmed). Specs updated. | 🛑 Stop B: expert approves specs. Then task 6. |
 | 2026-10-21 | Claude Code | ✅ Stop B passed: expert approved specs and tests. | Tasks 6–8. |
 | 2026-10-21 | Claude Code | Tasks 6–8: built `lib/`, compiled `population_count`, ran validation, `kat_001` (pass, +0.07%), `inv_001` (pass), produced 2 tables + 1 map with manifests. | 🛑 Stop C: expert reviews outputs, tests and code; adds `verified`. Then task 9 (retro). |
+| 2026-10-21 | Claude Code | Outputs had been deleted from the working tree; regenerated `map_population_count__bg_2020` (and its `population_count` tables) via `lib.runner run --mode author`. `kat_001` pass; outputs match the Stop C commit (same fingerprints, only `created` changed). | 🛑 Still at Stop C. |
+| 2026-10-21 | Chat | ✅ Stop C passed. Expert tested prompt invocation: a plain prompt bypassed the runner. Findings added to the retro notes (prompt routing, `inv_002`, `inv_001` scope, edits to stable specs, review load). | Task 9 (retro) in Claude Code. Expert adds `verified` line and sets specs `stable`. |
