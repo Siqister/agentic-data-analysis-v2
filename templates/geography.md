@@ -12,7 +12,8 @@ tags: [census, boundaries]                   # (optional)
 
 id_field: GEOID                              # unique code for each unit (always read as text)
 name_field: NAMELSAD                         # (optional) display name
-within: cle_city                             # (optional) keep only units inside this Geography; rule explained below
+within: cle_city                             # (optional) keep only units inside this Geography
+within_rule: majority_area                   # (required with within) majority_area | centroid | any
 ---
 
 # About
@@ -21,7 +22,7 @@ What the units are, roughly how many there are, who draws them, and the boundary
 
 # Which units are included
 
-The rule for deciding which units count as "in Cleveland," and how units that straddle the city line are handled.
+Why the `within_rule` was chosen, and what it means for units that straddle the line. For a local file, also give the source URL it was downloaded from.
 
 # Notes
 

@@ -1,9 +1,10 @@
 # Validation
 
-There are two kinds of checks:
+There are three kinds of checks:
 
 1. **Spec validation**: are the specs well-formed and consistent with each other? Runs before anything is computed.
 2. **Known-answer tests**: do our calculations reproduce numbers we already trust? Runs after Indicators are computed.
+3. **Invocation tests**: does the agent respond to a prompt the way it should? Checked by giving the agent the prompt.
 
 Other evaluation layers are deferred ([architecture.md § 13](../architecture.md#13-deferred)).
 
@@ -18,14 +19,16 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] Has frontmatter with `type` set to `Resource`, `Geography`, `Crosswalk`, `Indicator`, or `Visualization`, and sits in that type's folder.
 - [ ] File name is unique across `specs/`.
 - [ ] Has every field its template requires: `title`, a one-line `description`, `status`, plus the type's own fields. Fields marked *(optional)* may be missing.
-- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `classification`, `reliability.low`.
+- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `within_rule`, `classification`, `reliability.low`.
 - [ ] Contains no API key values. Only `.env` variable names are allowed.
 
 ### How specs fit together
 
 - [ ] Every ID in a reference field ([architecture.md § 5](../architecture.md#5-the-dependency-graph)) exists and has the right type.
 - [ ] The graph has no loops.
+- [ ] **Geography:** `within` and `within_rule` are both present or both missing.
 - [ ] **Crosswalk:** `population_weighted` has `weights` and `weights_source`; other methods have neither.
+- [ ] **Crosswalk:** `nested` with a `from` Geography that has `within` requires that `within` equals `to`. (Other `nested` crosswalks are checked when they're built: every unit must fall in exactly one target.)
 - [ ] **Indicator:** every listed crosswalk's `from` equals the Indicator's `geography`.
 - [ ] **Indicator:** every `data` entry uses a dataset and vintage on its Resource's approved `datasets` list.
 - [ ] **Indicator:** a `median` or `index` measure that has crosswalks has an `# Aggregation` section.
@@ -41,6 +44,7 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] Every Indicator has compiled code in `pipeline/` whose header gives its spec, spec hash, and `generated` info.
 - [ ] **Stale code:** the stored spec hash doesn't match the current spec. Listed along with everything above it in the graph.
 - [ ] **Unreviewed code:** no `verified` line. Listed; it can't run in run mode.
+- [ ] **Edited stable spec:** a `stable` spec whose content (anything but `status`) differs from the last commit. Warning: if the agent edited it, it goes back to `draft`.
 - [ ] **Run-mode readiness:** lists anything a requested output depends on that is still `draft`, stale, or unreviewed.
 
 ### Known-answer tests
@@ -70,7 +74,7 @@ All tests live in [known_answers.md](known_answers.md), one section per test:
 ```yaml
 indicator: housing_cost_burden_pct
 geography: cle_city
-unit: "3916000"                  # unit code (text)
+unit: "Cleveland"                # the unit's id_field value (text), e.g. NAME for cle_city, GEOID for Census units
 expected: 0.000                  # published value (placeholder)
 expected_moe: 0.000              # (optional) published margin of error
 tolerance: within_moe            # exact | absolute 0.5 | relative 2% | within_moe
@@ -80,7 +84,7 @@ source: ACS 2019–2023 5-year, B25070 + B25091, Cleveland city — https://data
 Optional note, e.g. "Ours is aggregated from block groups, so a small gap is expected."
 ````
 
-The heading gives the test ID (`kat_001`, `kat_002`, …).
+The heading gives the test ID (`kat_001`, `kat_002`, …). The YAML block is the contract: `lib/known_answers.py` reads only that. The prose under it is for people.
 
 ### Tolerance
 
@@ -98,3 +102,37 @@ Results rarely match exactly: published figures are rounded, and we aggregate fr
 - Tests run after any Indicator is computed or recomputed, and before dependent outputs are delivered.
 - A failure **blocks delivery** of every output that depends on that Indicator. The report shows expected, actual, difference, and tolerance.
 - The expert decides: fix the spec or code, or accept the difference. An accepted difference is noted under the test and recorded in affected manifests.
+
+---
+
+## 3. Invocation tests
+
+An invocation test checks how the agent responds to a plain-language prompt ([architecture.md § 2](../architecture.md#invocation)): whether it maps the prompt to the right spec, asks when the prompt is ambiguous, and refuses to improvise when nothing matches. Unlike known-answer tests, they test the agent's behavior, not a number.
+
+### Format
+
+All tests live in [invocation.md](invocation.md), one section per test:
+
+````markdown
+## inv_001 — Unknown indicator
+
+```yaml
+prompt: "Show me median household income by block group."
+expected: not_available          # runs | asks | not_available
+spec: null                       # (runs only) the spec ID the prompt should resolve to
+```
+
+What the agent should do, in plain language, including what it must not do.
+````
+
+The heading gives the test ID (`inv_001`, `inv_002`, …).
+
+| `expected` | Passes when the agent |
+|---|---|
+| `runs` | Resolves the prompt to `spec` and runs it through the runner |
+| `asks` | Asks which spec is meant, and runs nothing until answered |
+| `not_available` | Says the item isn't available and lists the available Indicators and Visualizations; creates, drafts, and fetches nothing (no new files in `specs/`, `pipeline/`, `data/`, or `outputs/`) |
+
+### When they run
+
+In author mode, when the runner, the agent's instructions, or the set of specs changes, and at least once per chunk. Each test starts from the **plain prompt, in a fresh agent session**: calling `lib.runner` directly tests the runner, not the agent. The expert (or a check of the working tree) confirms the behavior. A failure is a bug in the agent's instructions or the runner, not in an Indicator.

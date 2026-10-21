@@ -67,6 +67,15 @@ This file holds every requirement for building the project. [AGENTS.md](AGENTS.m
 5. It runs the known-answer tests.
 6. It writes the tables and the map, each with a manifest.
 
+### Invocation
+
+- A request is a plain-language prompt naming an Indicator or Visualization, e.g. "show me population by block group." The agent maps it to **one spec ID**. If more than one spec could match, it asks.
+- The agent carries out the request **only through reviewed code** in `lib/` and `pipeline/`. It never re-derives a computation for a single request. This holds even when the prompt doesn't mention specs; [AGENTS.md](AGENTS.md) rule 1 states it as the agent's first rule, because putting it only here wasn't enough (chunk 1).
+- Commands: `uv run python -m lib.runner list` (what's available), `run <id> [--mode author|run]`, `status` (code and results staleness); `uv run python -m lib.validate [--network]`.
+- The **runner** in `lib/` does steps 2–6 above. It is generic, so it lives in `lib/`, not `pipeline/`. Graph traversal is automatic: it reads the reference fields in frontmatter ([§ 5](#5-the-dependency-graph)) and walks down from the requested spec.
+- If no spec matches, the agent says the item isn't available and lists the Indicators and Visualizations that are. It creates, drafts, and fetches nothing.
+- How the agent responds to prompts is checked by **invocation tests** ([tests/validation.md § 3](tests/validation.md#3-invocation-tests)).
+
 ---
 
 ## 3. Specs and the Open Knowledge Format
@@ -111,7 +120,7 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 | Type | What it is | Folder | Adds these fields |
 |---|---|---|---|
 | **Resource** | One API, file, or dataset | `specs/resources/` | `resource`, `auth`, `datasets` |
-| **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within` |
+| **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule` |
 | **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source` |
 | **Indicator** | One measure | `specs/indicators/` | `measure`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability` |
 | **Visualization** | One map | `specs/visualizations/` | `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show` |
@@ -135,8 +144,18 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 One boundary file = one Geography: `bg_2020`, `tract_2020`, `cle_city`, `cle_neighborhoods`.
 
 - `id_field`: the unique code for each unit, always read as text.
-- `within` (optional): keep only units inside another Geography. The body explains the rule, including how units that straddle the city line are handled.
+- `within` (optional): keep only units inside another Geography.
+- `within_rule` (required with `within`): how units that straddle the boundary are decided, so helpers can apply it from frontmatter. Areas are measured in EPSG:3734.
+
+  | `within_rule` | A unit is kept when |
+  |---|---|
+  | `majority_area` | More than 50% of its area is inside |
+  | `centroid` | Its centroid is inside |
+  | `any` | Any part of it overlaps, beyond touching edges |
+
+  The body explains why the rule was chosen.
 - The coordinate system is read from the file itself ([§ 12](#12-conventions)).
+- Boundary files are snapshotted like Resources ([§ 10](#10-getting-data)).
 
 ### 4.3 Crosswalk
 
@@ -151,6 +170,7 @@ Moves data from one Geography (`from`) to another (`to`) by producing a **weight
 | `centroid` | The whole unit goes to the target containing its center | Rough approximation |
 | `nested` | Each unit is entirely inside one target (all weights 1) | Block groups → tracts |
 
+- `nested` is also valid when the `from` Geography's `within` equals `to`: the `within` filter already assigned every unit to that one target, e.g. `bg_2020` → `cle_city`.
 - Crosswalks move **counts only**, never percentages or medians.
 - Census blocks are used here to build weights. They are never reported.
 
@@ -229,6 +249,8 @@ Code without a `verified` line is unreviewed and can't run in run mode.
 | The frontmatter of a spec without compiled code | Results of everything above it **rerun**. No review is needed. |
 | Only the body of a spec without compiled code (documentation) | **Nothing.** |
 | A new data snapshot | Results of everything above it **rerun**. |
+| Any file in `lib/` | **All** results rerun. `lib/` changes are reviewed, so no recompile is needed. |
+| Only a spec's `status` | **Nothing.** `status` records approval, not content, so it's left out of spec hashes. |
 
 "Rerun" means running already-reviewed code again. "Recompile" means generating new code, which then needs the expert's review.
 
@@ -243,6 +265,7 @@ Compiled code is tracked in git.
 | Helper | What it does |
 |---|---|
 | Fetch & load | Fetch a request from a Resource into a snapshot; load snapshots and Geographies |
+| Runner | Walk the graph from a requested spec, check staleness, fetch, compute, test, and write outputs ([§ 2](#invocation)) |
 | Build crosswalk | Build a weights table using one of the allowed methods |
 | Apply crosswalk | Move counts and their margins of error between geographies |
 | Rate from counts | Percentage or rate from numerator and denominator counts, with margin of error |
@@ -281,6 +304,8 @@ known_answer_tests:
   kat_003: pass
 ```
 
+The manifest also records `lib_hash` (one hash of everything in `lib/`) and a `fingerprint` of all the hashes above. The runner compares them with the current state to decide whether the output is stale.
+
 HTML maps also show a short source note on the page, generated from the manifest.
 
 ---
@@ -303,6 +328,8 @@ HTML maps also show a short source note on the page, generated from the manifest
 4. The agent compiles the code; the expert reviews it.
 5. Tests run, and the expert marks the spec `stable`.
 
+**Editing a `stable` spec.** When the agent edits a `stable` spec (anything but `status`), it sets `status` back to `draft` in the same edit, so the expert approves the change. The validator warns about any `stable` spec whose content differs from the last commit.
+
 ---
 
 ## 10. Getting data
@@ -319,6 +346,11 @@ HTML maps also show a short source note on the page, generated from the manifest
   ```
 
   File-based Resources are snapshotted the same way, as one request for the whole file.
+- **Geography boundary files are snapshotted too.**
+  - A Geography whose `resource` is a **URL** is fetched once into `data/raw/<geography id>/<hash>/`, with a `snapshot.yaml` recording the URL, retrieval time, and hash.
+  - A Geography whose `resource` is a **local file** is hashed in place; it is not copied.
+  - Both hashes go in manifests, like Resource snapshots.
+- **Static local files** live in `data/static/<id>/`, e.g. a boundary file the expert downloaded by hand. Like the rest of `data/`, they're not committed. The spec records where the file came from (source URL in its body), and manifests record the file's hash.
 - **All computation reads snapshots, never a live source.** To refresh, fetch a new snapshot on purpose. Its hash changes, and everything above it reruns.
 - `data/` is not committed. Manifests record snapshot hashes.
 
@@ -344,14 +376,17 @@ cleveland-analysis/
 │   └── visualizations/
 ├── lib/                    shared helpers (reviewed)
 ├── pipeline/               compiled code (reviewed, pinned)
+├── pyproject.toml, uv.lock Python environment (uv, versions pinned)
 ├── data/raw/               snapshots (not committed)
+├── data/static/            local files added by hand, e.g. boundary files (not committed)
 ├── build/                  intermediate results, e.g. crosswalk weights (not committed)
-├── outputs/
+├── outputs/                (not committed)
 │   ├── tables/             CSV + manifest
 │   └── visualizations/     HTML + manifest
 └── tests/
-    ├── validation.md       validator checks + known-answer test format
-    └── known_answers.md    the known-answer tests
+    ├── validation.md       validator checks + known-answer and invocation test formats
+    ├── known_answers.md    the known-answer tests
+    └── invocation.md       the invocation tests
 ```
 
 `lib/`, `pipeline/`, `data/`, `build/` and `outputs/` are created during implementation.
@@ -414,9 +449,9 @@ cleveland-analysis/
 ### Tech stack
 
 - Python 3.11 or newer: pandas, geopandas, shapely, pyyaml, requests.
-- Environment manager to be chosen in the first roadmap step (uv or conda).
+- Environment manager: uv. Exact versions are pinned in `pyproject.toml` and `uv.lock`.
 - D3 v7 at a pinned version.
-- git. `.env`, `data/` and `build/` are not committed.
+- git. `.env`, `data/`, `build/` and `outputs/` are not committed.
 
 ---
 
@@ -435,4 +470,5 @@ Agreed during design, but not part of the first build.
 | **Data-source proposals log** | A place for the agent's suggested new sources. For now, they're raised in conversation. |
 | **More OKF features** | `sources`, `stale_after`, attested computation, `log.md`. |
 | **Change over time** | Comparisons across years, including converting 2010 boundaries to 2020. |
-| **Packaging as a skill** | After the Cleveland study works end to end. |
+| **Packaging as a skill** | After the Cleveland study works end to end. AGENTS.md rule 1 (route every request through the runner) moves into the skill, with a description that matches plain-language requests. |
+| **GeoPackage layers** | A `layer` field on Geography, for multi-layer files. Not needed while every file has one layer. |

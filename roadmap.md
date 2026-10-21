@@ -61,134 +61,66 @@ A chunk is done when **all** of these are true:
 Which parts of the design have been exercised end to end. ☐ not yet · ☑ tested (with the chunk that tested it).
 
 **Setup**
-- ☐ Python environment, git, `.env`
-- ☐ Spec validator
-- ☐ Snapshots and manifests
-- ☐ Staleness detection (code vs. results)
-- ☐ Known-answer tests
-- ☐ Run mode
+- ☑ Python environment, git, `.env` (chunk 1)
+- ☑ Spec validator (chunk 1)
+- ☑ Snapshots and manifests (chunk 1)
+- ☑ Staleness detection (code vs. results) (chunk 1)
+- ☑ Known-answer tests (chunk 1)
+- ☑ Run mode (chunk 1)
+- ◐ Invocation tests (chunk 1: `inv_001` ran through the runner only; `inv_001` and `inv_002` still need a fresh-session run from the plain prompt)
 
 **Resources & geographies**
-- ☐ API resource (Census Data API)
-- ☐ Local file resource
+- ☑ API resource (Census Data API) (chunk 1)
+- ☐ Local file resource (local-file snapshotting exercised through the `cle_city` Geography in chunk 1; no local-file Resource spec yet)
 - ☐ Point dataset
-- ☐ Geography from Census TIGER/Line
-- ☐ Geography from a local shapefile (neighborhoods)
-- ☐ Geography selection rule (`within`)
+- ☑ Geography from Census boundary files (chunk 1: cartographic boundary file, fetched by URL)
+- ☑ Geography from a local file (chunk 1: city GeoPackage; neighborhoods not yet)
+- ☑ Geography selection rule (`within`, `majority_area`) (chunk 1)
 
 **Indicators**
-- ☐ Count, with margin of error
+- ☑ Count, with margin of error (chunk 1)
 - ☐ Percent or rate (counts first, then rate)
-- ☐ Reliability flag / suppress
+- ☑ Reliability flag (chunk 1); suppress not yet
 - ☐ Median or other custom aggregation
 - ☐ Indicator that builds on other Indicators
 - ☐ Point aggregation
 
 **Crosswalks**
-- ☐ `nested`
+- ☑ `nested` (chunk 1: only `from.within == to` with one target unit)
 - ☐ `population_weighted`
 - ☐ `areal` / `centroid`
 
 **Visualizations**
-- ☐ Choropleth with tooltips
+- ☑ Choropleth with tooltips (chunk 1)
 
 ---
 
 ## Current chunk
 
-### Chunk 1 — Block group population count
+_None. The next chunk is defined in chat with the expert (step 1 of the working method)._
 
-**Analysis question:** Show me population by block group.
-
-**Brief:** Kept deliberately thin: one count, no percentages. Its purpose is to run every stage of the system once, from start to finish.
-
-**Branch:** `chunk/01-bg-population`
-
-**Status:** ✅ Stop A passed 2026-10-21: requirements approved by the expert, including the proposed fixes for design issues 1–6. Next: task 1, in Claude Code.
-
-**Exercises (capability checklist):** Python environment, git, `.env` · spec validator · snapshots and manifests · staleness detection · known-answer tests · run mode · API resource · local file resource · geography from Census boundary files · geography from a local file · `within` · count with margin of error · reliability flag · `nested` · choropleth with tooltips
-
-#### Requirements
-
-**Invocation**
-
-- The work is invoked by a plain-language prompt naming an Indicator or Visualization, e.g. "show me population by block group." The agent maps the prompt to a spec ID. If more than one spec could match, it asks.
-- The agent carries out the request **only through reviewed code** in `lib/` and `pipeline/`. It never re-derives a computation for a single request.
-- **Graph traversal is automatic.** A runner in `lib/` reads the reference fields in spec frontmatter ([architecture.md § 5](architecture.md#5-the-dependency-graph)) and walks down from the requested spec. It then checks staleness, fetches any missing snapshots, computes from the bottom up, runs the tests, and writes outputs with manifests.
-- If no spec matches the request, the agent says it isn't available and lists the Indicators and Visualizations that are. It creates, drafts, and fetches nothing.
-
-**Specs to draft** (all `status: draft`)
-
-| ID | Type | Settings |
-|---|---|---|
-| `census_api` | Resource | `https://api.census.gov/data`; `auth: CENSUS_API_KEY`; `datasets`: `acs/acs5` 2024 (the 2020–2024 5-year) |
-| `cle_city` | Geography | `resource: data/static/cle_city/City_Boundary_-6607456956089209299.gpkg`, the City of Cleveland's own boundary, downloaded by the expert. One layer (`City_Boundary`), one multipolygon, EPSG:3734 embedded. Fields: `OBJECTID`, `NAME`, no Census code. `id_field` is decided at Stop B. |
-| `bg_2020` | Geography | Census 2020 cartographic boundary file, Ohio block groups (`cb_2020_39_bg_500k`, clipped to the shoreline). `resource: https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_39_bg_500k.zip`, a fixed download URL, not an API. **The agent fetches it automatically** into a snapshot under `data/raw/`; the expert downloads nothing. The agent confirms the URL resolves at Stop B. `id_field: GEOID`; `within: cle_city` with the **majority-area rule**: a block group is in the city if more than 50% of its area is inside `cle_city`, measured in EPSG:3734 |
-| `bg_2020__to__cle_city` | Crosswalk | `method: nested`. Valid because `bg_2020` is already limited to block groups in `cle_city`. |
-| `population_count` | Indicator | `measure: count`; `geography: bg_2020`; `crosswalks: [bg_2020__to__cle_city]`; `data`: `census_api`, `acs/acs5` 2024, `B01003_001E` (Total population; `_M` pulled automatically); `reliability: {cv_threshold: 0.30, low: flag}` |
-| `map_population_count__bg_2020` | Visualization | `indicator: population_count`; `geography: bg_2020`; `classification: quantile`; `classes: 5`; `colors: Blues`; tooltip shows the standard fields only (name, estimate, MOE, reliability) |
-
-**Outputs** (each with its manifest)
-
-- `outputs/tables/population_count__bg_2020.csv`
-- `outputs/tables/population_count__cle_city.csv`
-- `outputs/visualizations/map_population_count__bg_2020.html`
-
-**Tests**
-
-- **Spec validation** passes for the whole project.
-- **`kat_001`: Total population, Cleveland city.** Compares the `cle_city` total (the sum of the included block groups) with the published ACS 2020–2024 5-year `B01003_001` for Cleveland city, Ohio (Census place `3916000`). Tolerance: `relative 2%`. The expert supplies the expected value from data.census.gov, or the agent proposes it with a link and the expert confirms. A gap is expected from two sources: straddling block groups, and differences between the City's boundary and the Census place boundary.
-- **`inv_001`: Unknown indicator.** A prompt asks for an indicator that has no spec, e.g. "median household income by block group." Expected behavior: the agent says it isn't available, lists the available Indicators, and creates or fetches nothing.
-
-**Not in this chunk:** tracts, neighborhoods, percentages or rates, census blocks, `population_weighted` crosswalks.
-
-**Accepted limitation:** a choropleth of raw counts partly reflects how large each block group is. That's acceptable here, because the chunk exists to exercise every stage.
-
-#### Design issues
-
-1. **Invocation isn't in architecture.md.** Add: prompt → spec ID → reviewed runner in `lib/`. The runner is generic, so it lives in `lib/`, not `pipeline/`.
-2. **Invocation tests are a new kind of test.** Add a short section to `tests/validation.md` defining them (prompt in, expected agent behavior out). The tests themselves go in `tests/invocation.md`.
-3. **The `within` rule isn't machine-readable.** Geographies are loaded by helpers from frontmatter, so the rule needs a field, e.g. `within_rule: majority_area | centroid | any`. Update the Geography template.
-4. **"Nested" after a `within` filter.** §4.3 should say `nested` is valid when the `from` Geography's `within` equals `to`.
-5. **Boundary files aren't snapshotted.** §10 covers Resources only. Geography files need the same treatment. A URL (like `bg_2020`) is fetched once into `data/raw/`, with a `snapshot.yaml` recording the URL, retrieval time, and hash. A local file (like `cle_city`) is hashed in place. Both hashes go in manifests.
-6. **Static local files.** `data/static/` isn't in the §11 layout. Add it: not committed, source URL recorded in the spec, file hash recorded in manifests.
-7. **`known_answers.md` must be machine-readable.** State that the YAML blocks are the contract and the prose is for people.
-8. **Unit codes without a Census code.** `cle_city` has no GEOID, so a known-answer test's `unit` uses whatever `id_field` is chosen.
-9. **GeoPackage layers.** The city file has a single layer. If a multi-layer file appears, Geography will need a `layer` field. Not needed now.
-
-Proposed: apply 1–6 before drafting specs, because the build depends on them. Handle 7, 8 and 9 in the retro.
-
-#### Tasks
-
-1. Make an initial commit on `main` (the repo has no commits yet), then create `chunk/01-bg-population`.
-2. Expert: add the source URL for the city boundary file, and the published value and MOE for `kat_001`.
-3. Apply design issues 1–6 to architecture.md, the templates, and `tests/validation.md`.
-4. Set up uv: Python ≥ 3.11 with pandas, geopandas, shapely, pyyaml and requests, versions pinned.
-5. Draft the six specs, update each folder's `index.md`, and add `kat_001` and `inv_001`. 🛑 **Stop B.**
-6. Build `lib/`: spec graph and validator, fetch and snapshot (API and local file), load geographies with the `within` rule, apply crosswalk with MOE, reliability, write output with manifest, choropleth (D3 v7, pinned), and the runner.
-7. Compile `pipeline/population_count.py`.
-8. Run validation, `kat_001` and `inv_001`, then produce the outputs. 🛑 **Stop C.**
-9. Retro per the working method.
-
-#### Decisions (2026-10-21)
-
-- **Data:** ACS 2020–2024 5-year, `B01003_001E`.
-- **Block group boundaries:** Census 2020 cartographic boundary file, not TIGER/Line, to avoid lake water. The agent fetches it by URL; no manual download.
-- **City boundary:** the City of Cleveland's own file, as a GeoPackage (single file, CRS embedded), not the Census place boundary.
-- **Straddling block groups:** majority-area rule.
-- **City total:** reported through a `nested` crosswalk.
-- **Reliability:** CV 0.30, flag.
-- **Map:** quantile, 5 classes, `Blues`.
-- **`kat_001` tolerance:** relative 2%. Tighten once the actual gap is known.
-- **Unknown indicator:** say it isn't available, list what exists, create nothing.
-- **Invocation:** by prompt; execution only through reviewed code.
-- **Environment:** uv.
+**Carried over from chunk 1:** run `inv_001` and `inv_002` from the plain prompt in a fresh session.
 
 ---
 
 ## Completed chunks
 
-_None yet._
+### Chunk 1 — Block group population count   (merged 2026-10-21)
+Delivered:
+  - Specs (all `stable`): `census_api`, `cle_city`, `bg_2020`, `bg_2020__to__cle_city`, `population_count`, `map_population_count__bg_2020`.
+  - Code: `lib/` (12 modules: spec graph, validator, snapshots, Census reader, geography + `within`, `nested` crosswalk, MOE + reliability, known-answer tests, outputs + manifests, choropleth with D3 7.9.0 embedded, runner). `pipeline/indicators/population_count.py` (verified).
+  - Outputs (not committed, rebuilt by the runner): `population_count__bg_2020.csv`, `population_count__cle_city.csv`, `map_population_count__bg_2020.html`, each with a manifest.
+  - Tests: `kat_001` (pass: 366,340 vs 366,097, +0.07%, tolerance relative 2%, kept at 2% by the expert); `inv_001`, `inv_002`.
+  - uv environment, Python 3.12, exact versions pinned.
+Retro:
+  - Worked: every stage ran from a request to outputs with manifests. The majority-area rule kept 429 block groups. The city total landed within 0.07% of the published figure. Staleness checks behaved per § 6 in every case tried (spec body vs. frontmatter, compiled-code spec, snapshot change). Run mode refused drafts and unreviewed code, then ran once approved. No API key reached any file.
+  - Broke: the geography loader failed when `id_field` and `name_field` are the same column (`cle_city` `NAME`); fixed. `variables.json` lists `_M` fields as attributes of `_E` fields, not as variables; the validator's field check was fixed. A plain-language prompt ("map the population count by block group in Cleveland") bypassed the runner and rebuilt the map ad hoc.
+  - Agent needed correction on: prompt routing (the invocation rule lived only in architecture.md; now AGENTS.md rule 1). `inv_001` was recorded as passing after calling the runner directly, which tests the runner, not the agent. Requirement facts were off: `cle_city` has no `OBJECTID`; task 7 named `pipeline/population_count.py`, but § 6 says `pipeline/indicators/`.
+  - Open points noted for later chunks: the city MOE (±7,663) is much larger than the published one (±76), because the published place total is controlled to population estimates. `lib/` is ≈1,300 lines; focus review on `moe.py`, `geography.py`, `census.py`, `crosswalk.py`. The crosswalk helper handles only `nested` with `from.within == to` and one target.
+Design changes:
+  - Before building (design issues 1–6): invocation and runner (§§ 2, 7), invocation tests (validation.md § 3, `tests/invocation.md`), `within_rule` (§ 4.2, Geography template), `nested` after `within` (§ 4.3), boundary-file snapshots and `data/static/` (§§ 10, 11), uv (§ 12).
+  - In the retro: AGENTS.md rule 1 (every request goes through the runner) and rule 7 (an edit to a `stable` spec sets it back to `draft`). `status` is left out of spec hashes; `lib/` changes make all results rerun (`lib_hash` in manifests) (§§ 6, 8, 9). Invocation tests start from the plain prompt in a fresh session (validation.md § 3). The validator warns on edited `stable` specs. `known_answers.md` YAML is the contract, and `unit` is the `id_field` value (design issues 7–8, validation.md § 2). `outputs/` isn't committed (§§ 11, 12). Deferred: a GeoPackage `layer` field (design issue 9) and moving rule 1 into the packaged skill (§ 13).
+  - Existing work brought in line: the compiled code header was restamped with the new spec hash (spec and code unchanged), `verified` was added, and the six specs were set to `stable` on the expert's instruction. Validation: 0 errors, 0 warnings. Outputs were rebuilt in run mode with identical values.
 
 Template for each finished chunk:
 
@@ -213,3 +145,10 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-21 | Chat | Agreed chunk-based working method; wrote this roadmap. Chunk 1 set as block group population count. | Define chunk 1 requirements in chat. |
 | 2026-10-21 | Chat | Defined chunk 1 requirements, design issues, and tasks. Confirmed city boundary GeoPackage (1 feature, EPSG:3734). | 🛑 Stop A: expert approves requirements; then implement in Claude Code. |
 | 2026-10-21 | Chat | 🛑 Stop A passed: expert approved chunk 1 requirements and the proposed fixes for design issues 1–6. | Claude Code: start at task 1 (initial commit, create branch). Stop B after specs are drafted. |
+| 2026-10-21 | Claude Code | Tasks 1, 3, 4, 5: initial commit on `main`, branch `chunk/01-bg-population`; design issues 1–6 applied; uv env (Python 3.12, pinned); six specs + `kat_001` + `inv_001` drafted. Checked: `B01003_001E` exists in `acs/acs5` 2024 variables; `bg_2020` URL resolves (HTTP 200, 9,466 Ohio BGs, EPSG:4269); city file has 1 feature, EPSG:3734. Stop B questions. |
+| 2026-10-21 | Claude Code | Expert answered Stop B questions and supplied task 2 inputs (city boundary source; `kat_001` confirmed). Specs updated. | 🛑 Stop B: expert approves specs. Then task 6. |
+| 2026-10-21 | Claude Code | ✅ Stop B passed: expert approved specs and tests. | Tasks 6–8. |
+| 2026-10-21 | Claude Code | Tasks 6–8: built `lib/`, compiled `population_count`, ran validation, `kat_001` (pass, +0.07%), `inv_001` (pass), produced 2 tables + 1 map with manifests. | 🛑 Stop C: expert reviews outputs, tests and code; adds `verified`. Then task 9 (retro). |
+| 2026-10-21 | Claude Code | Outputs had been deleted from the working tree; regenerated `map_population_count__bg_2020` (and its `population_count` tables) via `lib.runner run --mode author`. `kat_001` pass; outputs match the Stop C commit (same fingerprints, only `created` changed). | 🛑 Still at Stop C. |
+| 2026-10-21 | Chat | ✅ Stop C passed. Expert tested prompt invocation: a plain prompt bypassed the runner. Findings added to the retro notes (prompt routing, `inv_002`, `inv_001` scope, edits to stable specs, review load). | Task 9 (retro) in Claude Code. Expert adds `verified` line and sets specs `stable`. |
+| 2026-10-21 | Claude Code | Task 9 (retro). The expert decided: an agent edit to a `stable` spec → `draft`; hash `lib/` into manifests; keep `kat_001` at relative 2%; the agent sets `verified` and `stable` on the expert's behalf. Applied design changes, updated the checklist, ran validation (clean) and run mode (pass), merged `chunk/01-bg-population` into `main`. | Define chunk 2 in chat. First run `inv_001` and `inv_002` from the plain prompt in a fresh session. |
