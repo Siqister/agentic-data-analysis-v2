@@ -104,7 +104,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/01-bg-population`
 
-**Status:** 🛑 **At Stop B** (2026-10-21). Tasks 1–5 done. The expert answered all Stop B questions and the specs were updated to match; waiting for the expert's explicit approval of the specs before any code is generated (task 6).
+**Status:** 🛑 **At Stop C** (2026-10-21). Tasks 6–8 done: `lib/` built, `pipeline/indicators/population_count.py` compiled, validation, `kat_001` and `inv_001` pass, all three outputs produced with manifests. Waiting for the expert to review outputs, test results and code (see [Stop C review](#stop-c-review)). Then task 9 (retro).
 
 **Exercises (capability checklist):** Python environment, git, `.env` · spec validator · snapshots and manifests · staleness detection · known-answer tests · run mode · API resource · local file resource · geography from Census boundary files · geography from a local file · `within` · count with margin of error · reliability flag · `nested` · choropleth with tooltips
 
@@ -172,6 +172,34 @@ Applied 1–6 on 2026-10-21 (architecture.md §§ 2, 4.2, 4.3, 7, 10, 11, 12; `t
 6. **City MOE:** drafted as √(sum of squared MOEs) over all block groups. The Census Bureau's ACS handbook suggests that when several estimates are 0, only the largest of their MOEs is included. Which? → **Expert: whichever is easier.** Kept the plain √(sum of squares) as drafted: simpler, and slightly conservative (larger MOE).
 7. **Fetch extent:** the Indicator pulls all Cuyahoga County block groups (state 39, county 035) and keeps those in `bg_2020`. OK? → **OK.**
 
+#### Stop C review
+
+**Results**
+
+- `bg_2020`: **429** block groups kept by the majority-area rule.
+- `kat_001`: **pass**. Ours 366,340 vs published 366,097: +243 (+0.07%), tolerance relative 2%. The tolerance could be tightened.
+- City MOE: ours **±7,663** (CV 0.013, `ok`) vs published ±76. The published place total is controlled to the Census Bureau's population estimates, so it carries almost no sampling error; ours is the root-sum-of-squares of 429 block group MOEs.
+- Block groups: 137 of 429 are `low` reliability (CV > 0.30; max 0.63). 21 have estimate 0 (MOE 13), flagged per the spec.
+- `inv_001`: **pass**. `run median_household_income` says it isn't available and lists what is; no files created or changed in `specs/`, `pipeline/`, `data/`, `outputs/`.
+- Spec validation: 0 errors; warnings are only "draft / unreviewed" (expected before Stop C). Data field check (`--network`): `B01003_001E` = "Estimate!!Total" (Total Population), `_M` present.
+- Staleness checked: unchanged → up to date; crosswalk body edit → nothing; `bg_2020` frontmatter edit → results rerun; indicator body edit → code stale; edited snapshot file → results rerun. Run mode refuses (draft specs, unreviewed code).
+- No API key in `data/`, `outputs/`, `build/`, code, or specs.
+
+**To review**
+
+- `lib/`: `specs.py` (graph), `validate.py`, `compiled.py` (headers, code staleness), `snapshot.py` (fetch, snapshots), `census.py` (API tables, annotations), `geography.py` (load + `within`), `crosswalk.py` (`nested` only), `moe.py` (MOE, reliability), `known_answers.py`, `output.py` (CSV, manifests, results staleness), `choropleth.py` (+ `lib/vendor/d3.v7.9.0.min.js`), `runner.py`.
+- `pipeline/indicators/population_count.py`. When approved, the expert adds `# verified: { by: human:<name>, at: <time> }`.
+- Outputs in `outputs/`.
+
+**Notes for the retro**
+
+- Compiled code lives at `pipeline/indicators/population_count.py` (architecture.md § 6), not `pipeline/population_count.py` (task 7 wording).
+- D3 is embedded inline in each map (≈280 KB) so maps are fully self-contained and work offline.
+- Changes to `lib/` don't mark results stale (only specs, compiled code and data do). Use `--force` in author mode after a `lib/` change. Decide whether `lib/` hashes belong in manifests.
+- `crosswalk.build` handles only `nested` with `from.within == to` and a single target unit; other cases raise until a later chunk generalizes it.
+- Runner commands: `uv run python -m lib.runner list | status | run <id> [--mode author|run] [--force]`; `uv run python -m lib.validate [--network]`.
+- Bug caught on first run: `cle_city` uses `NAME` for both `id_field` and `name_field`; the loader originally renamed the column before reading the name. Fixed.
+
 #### Tasks
 
 1. Make an initial commit on `main` (the repo has no commits yet), then create `chunk/01-bg-population`.
@@ -229,3 +257,5 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-21 | Chat | 🛑 Stop A passed: expert approved chunk 1 requirements and the proposed fixes for design issues 1–6. | Claude Code: start at task 1 (initial commit, create branch). Stop B after specs are drafted. |
 | 2026-10-21 | Claude Code | Tasks 1, 3, 4, 5: initial commit on `main`, branch `chunk/01-bg-population`; design issues 1–6 applied; uv env (Python 3.12, pinned); six specs + `kat_001` + `inv_001` drafted. Checked: `B01003_001E` exists in `acs/acs5` 2024 variables; `bg_2020` URL resolves (HTTP 200, 9,466 Ohio BGs, EPSG:4269); city file has 1 feature, EPSG:3734. Stop B questions. |
 | 2026-10-21 | Claude Code | Expert answered Stop B questions and supplied task 2 inputs (city boundary source; `kat_001` confirmed). Specs updated. | 🛑 Stop B: expert approves specs. Then task 6. |
+| 2026-10-21 | Claude Code | ✅ Stop B passed: expert approved specs and tests. | Tasks 6–8. |
+| 2026-10-21 | Claude Code | Tasks 6–8: built `lib/`, compiled `population_count`, ran validation, `kat_001` (pass, +0.07%), `inv_001` (pass), produced 2 tables + 1 map with manifests. | 🛑 Stop C: expert reviews outputs, tests and code; adds `verified`. Then task 9 (retro). |
