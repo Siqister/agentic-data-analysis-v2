@@ -1,0 +1,15 @@
+# Secrets — API keys live here and must never be committed
+.env
+.env.*
+
+# Raw data snapshots — tracked by hash in each output's manifest, not in git
+data/
+
+# Intermediate results (crosswalk weight tables, cached values) — can always be rebuilt
+build/
+
+# Python / OS clutter
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
