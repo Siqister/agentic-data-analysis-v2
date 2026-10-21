@@ -373,7 +373,7 @@ cleveland-analysis/
 ├── data/raw/               snapshots (not committed)
 ├── data/static/            local files added by hand, e.g. boundary files (not committed)
 ├── build/                  intermediate results, e.g. crosswalk weights (not committed)
-├── outputs/
+├── outputs/                (not committed)
 │   ├── tables/             CSV + manifest
 │   └── visualizations/     HTML + manifest
 └── tests/
@@ -444,7 +444,7 @@ cleveland-analysis/
 - Python 3.11 or newer: pandas, geopandas, shapely, pyyaml, requests.
 - Environment manager: uv. Exact versions are pinned in `pyproject.toml` and `uv.lock`.
 - D3 v7 at a pinned version.
-- git. `.env`, `data/` and `build/` are not committed.
+- git. `.env`, `data/`, `build/` and `outputs/` are not committed.
 
 ---
 

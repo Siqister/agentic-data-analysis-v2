@@ -8,6 +8,9 @@ data/
 # Intermediate results (crosswalk weight tables, cached values) — can always be rebuilt
 build/
 
+# Outputs (tables, maps, manifests) — rebuilt by the runner from specs, code and snapshots
+outputs/
+
 # Python / OS clutter
 __pycache__/
 *.pyc
