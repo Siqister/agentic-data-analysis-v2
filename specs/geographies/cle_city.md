@@ -16,7 +16,7 @@ One unit: the City of Cleveland, Ohio. A GeoPackage with one layer (`City_Bounda
 
 Fields: `NAME` (`Cleveland`), plus `CREATEDBY`, `DATECREATED`, `MODIFIEDBY`, `DATEMODIFIED`, `MAINTENANCEID` and `GLOBALID`. The file has no Census code, so `id_field` is `NAME`, and the unit code is `Cleveland`.
 
-Source: _to be supplied by the expert (the URL the file was downloaded from)._
+Source: City of Cleveland Open Data, City Boundary dataset — <https://data.clevelandohio.gov/datasets/fa8ba3c00cf842fd8dd49e8d9e80e268_0>. Downloaded by the expert as a GeoPackage on 2026-10-21.
 
 # Which units are included
 

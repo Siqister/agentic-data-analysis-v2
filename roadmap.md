@@ -104,7 +104,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/01-bg-population`
 
-**Status:** 🛑 **At Stop B** (2026-10-21). Tasks 1, 3, 4 and 5 done in Claude Code; the six specs, `kat_001` and `inv_001` are drafted and waiting for the expert's approval. Task 2 is still open (city boundary source URL; confirm `kat_001`). Open questions for the expert are listed under [Stop B questions](#stop-b-questions). No code has been generated.
+**Status:** 🛑 **At Stop B** (2026-10-21). Tasks 1–5 done. The expert answered all Stop B questions and the specs were updated to match; waiting for the expert's explicit approval of the specs before any code is generated (task 6).
 
 **Exercises (capability checklist):** Python environment, git, `.env` · spec validator · snapshots and manifests · staleness detection · known-answer tests · run mode · API resource · local file resource · geography from Census boundary files · geography from a local file · `within` · count with margin of error · reliability flag · `nested` · choropleth with tooltips
 
@@ -162,15 +162,15 @@ Applied 1–6 on 2026-10-21 (architecture.md §§ 2, 4.2, 4.3, 7, 10, 11, 12; `t
 
 10. **`cle_city` fields differ from the requirements.** The file has `NAME`, `GLOBALID`, `MAINTENANCEID`, `CREATEDBY`, `DATECREATED`, `MODIFIEDBY`, `DATEMODIFIED`; there is no `OBJECTID`. Drafted with `id_field: NAME` (unit code `Cleveland`).
 
-#### Stop B questions
+#### Stop B questions (answered 2026-10-21)
 
-1. **`cle_city` `id_field`:** `NAME` (unit code `Cleveland`) as drafted, or `GLOBALID`?
-2. **`cle_city` source URL** (task 2): needed for the spec body.
-3. **`kat_001` expected value:** the agent proposes 366,097 ± 76 (API, `acs/acs5` 2024, place `3916000`). Confirm on data.census.gov.
-4. **Block group names:** the boundary file's name fields hold only "Block Group 2", so `bg_2020` has no `name_field` and the tooltip shows the GEOID. OK?
-5. **Zero estimates:** a block group with estimate 0 has no CV. Drafted as `cv` blank, `reliability: low`, note "estimate is 0; CV undefined". OK?
-6. **City MOE:** drafted as √(sum of squared MOEs) over all block groups. The Census Bureau's ACS handbook suggests that when several estimates are 0, only the largest of their MOEs is included. Which?
-7. **Fetch extent:** the Indicator pulls all Cuyahoga County block groups (state 39, county 035) and keeps those in `bg_2020`. OK?
+1. **`cle_city` `id_field`:** `NAME` (unit code `Cleveland`) as drafted, or `GLOBALID`? → **`NAME`.**
+2. **`cle_city` source URL** (task 2): needed for the spec body. → **<https://data.clevelandohio.gov/datasets/fa8ba3c00cf842fd8dd49e8d9e80e268_0>**, added to `cle_city`.
+3. **`kat_001` expected value:** the agent proposes 366,097 ± 76 (API, `acs/acs5` 2024, place `3916000`). Confirm on data.census.gov. → **Confirmed.**
+4. **Block group names:** the boundary file's name fields hold only "Block Group 2", so `bg_2020` has no `name_field` and the tooltip shows the GEOID. OK? → **OK.**
+5. **Zero estimates:** a block group with estimate 0 has no CV. Drafted as `cv` blank, `reliability: low`, note "estimate is 0; CV undefined". OK? → **OK.**
+6. **City MOE:** drafted as √(sum of squared MOEs) over all block groups. The Census Bureau's ACS handbook suggests that when several estimates are 0, only the largest of their MOEs is included. Which? → **Expert: whichever is easier.** Kept the plain √(sum of squares) as drafted: simpler, and slightly conservative (larger MOE).
+7. **Fetch extent:** the Indicator pulls all Cuyahoga County block groups (state 39, county 035) and keeps those in `bg_2020`. OK? → **OK.**
 
 #### Tasks
 
@@ -227,4 +227,5 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-21 | Chat | Agreed chunk-based working method; wrote this roadmap. Chunk 1 set as block group population count. | Define chunk 1 requirements in chat. |
 | 2026-10-21 | Chat | Defined chunk 1 requirements, design issues, and tasks. Confirmed city boundary GeoPackage (1 feature, EPSG:3734). | 🛑 Stop A: expert approves requirements; then implement in Claude Code. |
 | 2026-10-21 | Chat | 🛑 Stop A passed: expert approved chunk 1 requirements and the proposed fixes for design issues 1–6. | Claude Code: start at task 1 (initial commit, create branch). Stop B after specs are drafted. |
-| 2026-10-21 | Claude Code | Tasks 1, 3, 4, 5: initial commit on `main`, branch `chunk/01-bg-population`; design issues 1–6 applied; uv env (Python 3.12, pinned); six specs + `kat_001` + `inv_001` drafted. Checked: `B01003_001E` exists in `acs/acs5` 2024 variables; `bg_2020` URL resolves (HTTP 200, 9,466 Ohio BGs, EPSG:4269); city file has 1 feature, EPSG:3734. | 🛑 Stop B: expert answers the Stop B questions, supplies task 2 inputs, approves specs. Then task 6. |
+| 2026-10-21 | Claude Code | Tasks 1, 3, 4, 5: initial commit on `main`, branch `chunk/01-bg-population`; design issues 1–6 applied; uv env (Python 3.12, pinned); six specs + `kat_001` + `inv_001` drafted. Checked: `B01003_001E` exists in `acs/acs5` 2024 variables; `bg_2020` URL resolves (HTTP 200, 9,466 Ohio BGs, EPSG:4269); city file has 1 feature, EPSG:3734. Stop B questions. |
+| 2026-10-21 | Claude Code | Expert answered Stop B questions and supplied task 2 inputs (city boundary source; `kat_001` confirmed). Specs updated. | 🛑 Stop B: expert approves specs. Then task 6. |
