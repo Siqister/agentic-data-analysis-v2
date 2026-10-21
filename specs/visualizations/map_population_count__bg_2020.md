@@ -2,7 +2,7 @@
 type: Visualization
 title: Total population by block group, 2020–2024
 description: Choropleth of total population by 2020 census block group in Cleveland.
-status: draft
+status: stable
 
 indicator: population_count
 geography: bg_2020

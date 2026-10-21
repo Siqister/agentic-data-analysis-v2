@@ -21,9 +21,15 @@ def manifest_path(output: Path) -> Path:
     return output.with_name(output.name + ".manifest.yaml")
 
 
+def lib_hash() -> str:
+    """One hash of the shared helpers (Python files and vendored assets)."""
+    files = sorted(p for p in (ROOT / "lib").rglob("*") if p.is_file() and "__pycache__" not in p.parts)
+    return sha256(json.dumps([[str(p.relative_to(ROOT)), file_hash(p)] for p in files]).encode())
+
+
 def fingerprint(built_from: list[dict], data: list[dict]) -> str:
     keys = [{k: b.get(k) for k in ("id", "spec_hash", "code_hash")} for b in built_from]
-    return sha256(json.dumps([keys, [d["hash"] for d in data]], sort_keys=True).encode())
+    return sha256(json.dumps([keys, [d["hash"] for d in data], lib_hash()], sort_keys=True).encode())
 
 
 def write_manifest(output: Path, built_from: list[dict], data: list[dict], tests: dict) -> dict:
@@ -31,6 +37,7 @@ def write_manifest(output: Path, built_from: list[dict], data: list[dict], tests
         "output": str(output.relative_to(ROOT)),
         "created": datetime.now().astimezone().isoformat(timespec="seconds"),
         "fingerprint": fingerprint(built_from, data),
+        "lib_hash": lib_hash(),
         "built_from": built_from,
         "data": data,
         "known_answer_tests": tests,
@@ -71,6 +78,8 @@ def stale_reason(output: Path, built_from: list[dict]) -> str | None:
             return f"snapshot {d['path']} is missing"
         if file_hash(p) != d["hash"]:
             return f"data {d['path']} changed"
+    if m.get("lib_hash") != lib_hash():
+        return "lib/ changed"
     if any(v != "pass" for v in (m.get("known_answer_tests") or {}).values()):
         return "a known-answer test did not pass"
     return None

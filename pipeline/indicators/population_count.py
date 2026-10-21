@@ -1,6 +1,7 @@
 # spec: specs/indicators/population_count.md
-# spec_hash: sha256:9d79593b3f4306c8f020f36dd2ab31d0a9706fadbc1262761950fa655a66fe99
+# spec_hash: sha256:dfca17a449b8099123f3060bf23da2420c2bf7daea133db620245c4f5533e139
 # generated: { by: claude-code, at: 2026-10-21T17:08:51-04:00 }
+# verified: { by: human:siqi, at: 2026-10-21T17:51:45-04:00 }
 """Total population (B01003_001), by block group and for the city. Steps follow the spec's # Computation."""
 
 import pandas as pd

@@ -68,13 +68,15 @@ class Spec:
 
     @property
     def hash(self) -> str:
-        """Whole file: used for specs with compiled code."""
-        return sha256(self.text.encode())
+        """Whole file except `status`: used for specs with compiled code.
+        `status` is approval, not content, so approving a spec doesn't make its code stale."""
+        return sha256(re.sub(r"^status:.*\n", "", self.text, count=1, flags=re.M).encode())
 
     @property
     def meta_hash(self) -> str:
-        """Frontmatter only: used for specs without compiled code."""
-        return sha256(json.dumps(self.meta, sort_keys=True, default=str).encode())
+        """Frontmatter except `status`: used for specs without compiled code."""
+        meta = {k: v for k, v in self.meta.items() if k != "status"}
+        return sha256(json.dumps(meta, sort_keys=True, default=str).encode())
 
     def sections(self) -> set[str]:
         return {m.strip() for m in re.findall(r"^# (.+)$", self.body, re.M)}

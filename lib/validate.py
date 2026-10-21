@@ -7,6 +7,7 @@
 
 import argparse
 import re
+import subprocess
 import sys
 from dataclasses import dataclass, field
 
@@ -135,12 +136,29 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
         except ValueError as e:
             err(f"{s.rel} — {e}")
 
+    _check_stable_edits(specs, warn)
     _check_indexes(specs, err)
     _check_code(specs, err, warn)
     _check_tests(specs, err)
     if network:
         _check_fields(specs, r)
     return r
+
+
+def _check_stable_edits(specs, warn):
+    """A `stable` spec whose content (anything but `status`) changed since the last commit
+    may have been edited without re-approval."""
+    for s in specs.values():
+        if s.meta.get("status") != "stable":
+            continue
+        try:
+            committed = subprocess.run(["git", "show", f"HEAD:{s.rel}"], cwd=ROOT,
+                                       capture_output=True, text=True, check=True).stdout
+        except (OSError, subprocess.CalledProcessError):
+            continue   # not committed yet, or no git
+        if Spec(s.id, s.path, {}, "", committed).hash != s.hash:
+            warn(f"{s.rel} — stable, but changed since the last commit. If the agent edited it, "
+                 "set it back to draft for the expert to re-approve")
 
 
 def _env_values() -> list[str]:

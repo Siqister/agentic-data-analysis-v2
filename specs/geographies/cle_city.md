@@ -3,7 +3,7 @@ type: Geography
 title: City of Cleveland boundary
 description: The City of Cleveland's official municipal boundary, as published by the City.
 resource: data/static/cle_city/City_Boundary_-6607456956089209299.gpkg
-status: draft
+status: stable
 tags: [boundaries, city]
 
 id_field: NAME

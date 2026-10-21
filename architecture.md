@@ -70,7 +70,8 @@ This file holds every requirement for building the project. [AGENTS.md](AGENTS.m
 ### Invocation
 
 - A request is a plain-language prompt naming an Indicator or Visualization, e.g. "show me population by block group." The agent maps it to **one spec ID**. If more than one spec could match, it asks.
-- The agent carries out the request **only through reviewed code** in `lib/` and `pipeline/`. It never re-derives a computation for a single request.
+- The agent carries out the request **only through reviewed code** in `lib/` and `pipeline/`. It never re-derives a computation for a single request. This holds even when the prompt doesn't mention specs; [AGENTS.md](AGENTS.md) rule 1 states it as the agent's first rule, because putting it only here wasn't enough (chunk 1).
+- Commands: `uv run python -m lib.runner list` (what's available), `run <id> [--mode author|run]`, `status` (code and results staleness); `uv run python -m lib.validate [--network]`.
 - The **runner** in `lib/` does steps 2–6 above. It is generic, so it lives in `lib/`, not `pipeline/`. Graph traversal is automatic: it reads the reference fields in frontmatter ([§ 5](#5-the-dependency-graph)) and walks down from the requested spec.
 - If no spec matches, the agent says the item isn't available and lists the Indicators and Visualizations that are. It creates, drafts, and fetches nothing.
 - How the agent responds to prompts is checked by **invocation tests** ([tests/validation.md § 3](tests/validation.md#3-invocation-tests)).
@@ -248,6 +249,8 @@ Code without a `verified` line is unreviewed and can't run in run mode.
 | The frontmatter of a spec without compiled code | Results of everything above it **rerun**. No review is needed. |
 | Only the body of a spec without compiled code (documentation) | **Nothing.** |
 | A new data snapshot | Results of everything above it **rerun**. |
+| Any file in `lib/` | **All** results rerun. `lib/` changes are reviewed, so no recompile is needed. |
+| Only a spec's `status` | **Nothing.** `status` records approval, not content, so it's left out of spec hashes. |
 
 "Rerun" means running already-reviewed code again. "Recompile" means generating new code, which then needs the expert's review.
 
@@ -301,6 +304,8 @@ known_answer_tests:
   kat_003: pass
 ```
 
+The manifest also records `lib_hash` (one hash of everything in `lib/`) and a `fingerprint` of all the hashes above. The runner compares them with the current state to decide whether the output is stale.
+
 HTML maps also show a short source note on the page, generated from the manifest.
 
 ---
@@ -322,6 +327,8 @@ HTML maps also show a short source note on the page, generated from the manifest
 3. The agent checks every field code against the API's own field list (for Census, `variables.json` for that dataset and vintage).
 4. The agent compiles the code; the expert reviews it.
 5. Tests run, and the expert marks the spec `stable`.
+
+**Editing a `stable` spec.** When the agent edits a `stable` spec (anything but `status`), it sets `status` back to `draft` in the same edit, so the expert approves the change. The validator warns about any `stable` spec whose content differs from the last commit.
 
 ---
 
@@ -463,4 +470,5 @@ Agreed during design, but not part of the first build.
 | **Data-source proposals log** | A place for the agent's suggested new sources. For now, they're raised in conversation. |
 | **More OKF features** | `sources`, `stale_after`, attested computation, `log.md`. |
 | **Change over time** | Comparisons across years, including converting 2010 boundaries to 2020. |
-| **Packaging as a skill** | After the Cleveland study works end to end. |
+| **Packaging as a skill** | After the Cleveland study works end to end. AGENTS.md rule 1 (route every request through the runner) moves into the skill, with a description that matches plain-language requests. |
+| **GeoPackage layers** | A `layer` field on Geography, for multi-layer files. Not needed while every file has one layer. |

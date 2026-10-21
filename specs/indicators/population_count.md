@@ -2,7 +2,7 @@
 type: Indicator
 title: Total population
 description: Number of people, from the ACS 5-year estimates.
-status: draft
+status: stable
 tags: [demographics]
 
 measure: count
