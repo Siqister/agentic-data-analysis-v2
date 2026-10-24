@@ -194,7 +194,12 @@ Applied 1–4 on 2026-10-24: `inv_001` prompt → "Show me median gross rent by 
 - A `lib/` change made every result rerun on its own (`lib_hash`, from the chunk 1 retro), with no `--force`.
 - No API key in `data/`, `outputs/`, `build/`, code, or specs.
 
-**Invocation tests (expert, fresh sessions, plain prompts):** `inv_001` (median gross rent → not available, list), `inv_002` (population map → runs), `inv_003` (income map → runs). Not run yet.
+**Invocation tests (expert, fresh sessions, plain prompts, 2026-10-24):**
+
+- `inv_001` (median gross rent → not available, list): result not reported yet.
+- `inv_002` ("Map the population count by block group in Cleveland."): resolved to `map_population_count__bg_2020` and went through `lib.runner`. The runner, in run mode (the default), refused: `population_count` is `draft` with unreviewed code. **Routing passed; no output**, as run mode requires.
+- `inv_003` ("Map median household income by block group in Cleveland."): resolved to `map_median_household_income__bg_2020` and went through `lib.runner`. Run mode refused: the map and Indicator are `draft`, and the code is unreviewed. **Routing passed; no output**, as run mode requires.
+- **Retro note:** `runs` tests run before approval always hit run mode's refusal, so they test routing but not the run itself. Options: (a) at Stop C, approve first (`verified`, `stable`), then run the invocation tests; (b) define `runs` as "resolves to `spec` and invokes the runner", and accept a readiness refusal as a pass while specs are `draft`.
 
 **To review**
 
@@ -284,3 +289,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Follow-ups: city total uses available parts with a note (option B); principle "compute with flagged uncertainty rather than stop" added to § 12; median annotation rule aligned with `population_count`. | 🛑 Stop B: expert approves the specs. Then task 6. |
 | 2026-10-24 | Claude Code | ✅ Stop B passed: expert approved both new specs, the edited `population_count`, `kat_002`, `inv_001`, `inv_003`. | Tasks 6–7. |
 | 2026-10-24 | Claude Code | Tasks 6–7: `lib/` extended (`unit: dollars`, partial sums, `estimate_moe`), fixed a latent annotation-note bug in `census.read`, recompiled `population_count`, compiled `median_household_income`, produced outputs. `kat_001` and `kat_002` pass. | 🛑 Stop C: expert runs `inv_001`–`inv_003` in fresh sessions and reviews. Then task 8 (retro). |
+| 2026-10-24 | Claude Code | Expert ran `inv_002` and `inv_003`: both resolved correctly and used the runner, which refused in run mode (specs `draft`, code unreviewed). Routing passed; no outputs, as expected before approval. | 🛑 Stop C: `inv_001` result; expert review and approval; decide when `runs` tests happen. |
