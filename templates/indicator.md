@@ -36,6 +36,9 @@ reliability:                                 # (optional) survey data only
   low: flag                                  # flag (keep and mark) | suppress (leave blank)
 ---
 
+<!-- The body is about the measure, not the place: no place names, unit types, or Geography or
+     Crosswalk IDs. Fetching, joining, crosswalks and reliability are done by lib/. -->
+
 # Definition
 
 One plain-language paragraph, then:

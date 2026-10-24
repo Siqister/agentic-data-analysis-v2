@@ -105,7 +105,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/02-bg-median-income`
 
-**Status:** 🛑 **At Stop C** (2026-10-24). Tasks 6–7 done; see [Stop C review](#stop-c-review-chunk-2). Waiting for the expert to run `inv_001`–`inv_003` in fresh sessions and review outputs, tests and code. Then task 8 (retro).
+**Status:** 🛑 **At Stop C** (2026-10-24). Tasks 6–7 done, then design issue 5 (separation of concerns) applied after the expert's review; see [Stop C review](#stop-c-review-chunk-2). Waiting for the expert's review and approval. Then task 8 (retro).
 
 **Exercises (capability checklist):** no new item; it reuses API resource, `within`, reliability flag and choropleth. New smaller cases, below the level of the checklist: `measure: median` with no crosswalks, blank values that are expected rather than errors, table-specific top- and bottom-coded values, and a dollar format on the map.
 
@@ -161,6 +161,8 @@ No city table.
 3. **Expected blanks.** `population_count` treats a missing value as an error. For medians, blanks are normal. Proposed: § 12 *Output tables* says "a missing unit (row) is an error; a blank value with its reason in `note` is allowed." Confirm that no `lib/` check treats blank values as an error. (`output.py` already keeps blanks blank.)
 4. **Dollar format.** `choropleth.py` formats values as either counts (`,.0f`) or percents. Proposed: add an optional `unit` field to Indicator (`count` by default, or `dollars`; percent still comes from `measure`). Update § 4.4, the Indicator template, the validator, and the tooltip and legend formats (`$,.0f`). This is a `lib/` change, so it needs review, and every result reruns.
 
+5. **Separation of concerns (raised by the expert at Stop C, 2026-10-24).** Both Indicator bodies named "every block group in Cuyahoga County". Indicators must be general regardless of geography and point to Geographies only through frontmatter. The gap: nothing in the design said where the request extent belongs, so it landed in the Indicator (and in this roadmap's Computation steps for chunks 1 and 2, which are now superseded). Expert's decisions: (1) derive the extent from the Geography's kept units (new `census_unit` field); (2) the runner applies crosswalks and reliability; (3) no validator check for geography words in bodies (inspection is enough for now); (4) add a validator check that each field is published at the geography's `census_unit`; (5) fix everything in chunk 2, and approve nothing known to be wrong.
+
 Not issues (checked in the code): the validator requires `# Aggregation` only for a median *with* crosswalks; the runner handles an Indicator with no `crosswalks`; `exact` tolerance already exists in `known_answers.py`.
 
 Proposed: apply 1–4 before drafting specs.
@@ -201,11 +203,21 @@ Applied 1–4 on 2026-10-24: `inv_001` prompt → "Show me median gross rent by 
 - `inv_003` ("Map median household income by block group in Cleveland."): resolved to `map_median_household_income__bg_2020` and went through `lib.runner`. Run mode refused: the map and Indicator are `draft`, and the code is unreviewed. **Routing passed; no output**, as run mode requires.
 - **Retro note:** `runs` tests run before approval always hit run mode's refusal, so they test routing but not the run itself. Options: (a) at Stop C, approve first (`verified`, `stable`), then run the invocation tests; (b) define `runs` as "resolves to `spec` and invokes the runner", and accept a readiness refusal as a pass while specs are `draft`.
 
+**Design issue 5 applied (2026-10-24)**
+
+- architecture.md: new *Separation of concerns* table in § 4 (with the test "changing an Indicator's `geography` must not require editing its body"); `census_unit` and the derived extent in § 4.2; § 4.4 says the body is about the measure, and lists what `lib/` does for every Indicator; § 7 runner; § 12 now holds the generic rules that were repeated in Indicator bodies (reliability at every geography, estimate 0, blank estimate or MOE, counts through a crosswalk, "not published" nulls).
+- Templates: `census_unit` in Geography; a body note in Indicator. validation.md: `census_unit` choices, "Indicator with Census data → geography has `census_unit`", and the publication check.
+- Specs: `bg_2020` gets `census_unit: block group`. `census_api`: Access uses placeholders and says unpublished fields return `null`; the annotation rule now lives in its Notes (stated once, linked from both Indicators); the Cleveland counts are removed from the B19013 note. `bg_2020__to__cle_city` Edge cases now hold the city-total caveat that was in `population_count`. Both Indicator bodies cover only the measure: `population_count` has 2 steps, `median_household_income` has 3.
+- `lib/`: `census.requests_for` (extent from GEOIDs: one request per state, a list of counties) and `null` handling in `census.read`; `Context.acs(entry)` fetches for the Indicator's geography, joins, and stops on a missing unit or a field not published anywhere; `runner.report` applies crosswalks (`count` only for now) and reliability; validator `census_unit` and publication checks (tested: B17001 at block group is reported as not published).
+- Code recompiled: both Indicators now return one table at their own geography and name no Geography, Crosswalk, or place.
+- Result: all three tables are **byte-identical** to the previous run, and no new snapshot was fetched (the derived request matches the old one). `kat_001` and `kat_002` pass. Validation: 0 errors.
+
 **To review**
 
 - `lib/` changes: `census.py` (new `estimate_moe` helper; **bug fix** in `read`: the annotation note was filled with a printed copy of a whole pandas column, an f-string bug latent since chunk 1 that B19013 exposed); `crosswalk.py` (`apply_count` sums the values it has and notes what's missing, with a `label` for the unit name, instead of stopping); `choropleth.py` + `runner.py` (`unit: dollars` → `$,.0f`); `validate.py` (`unit` choices).
 - `pipeline/indicators/population_count.py` (recompiled: uses `estimate_moe`, city note label) and `pipeline/indicators/median_household_income.py` (new). Each needs a `verified` line.
-- Specs to set `stable`: `population_count`, `median_household_income`, `map_median_household_income__bg_2020`.
+- Specs to set `stable`: `census_api`, `bg_2020`, `bg_2020__to__cle_city`, `population_count`, `median_household_income`, `map_median_household_income__bg_2020` (`cle_city` and `map_population_count__bg_2020` are unchanged and still `stable`).
+- Also changed by design issue 5: `lib/census.py` (`requests_for`, nulls), `lib/runner.py` (`Context.acs`, `report`), `lib/validate.py`, and both code files again.
 
 #### Tasks
 
@@ -291,3 +303,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Tasks 6–7: `lib/` extended (`unit: dollars`, partial sums, `estimate_moe`), fixed a latent annotation-note bug in `census.read`, recompiled `population_count`, compiled `median_household_income`, produced outputs. `kat_001` and `kat_002` pass. | 🛑 Stop C: expert runs `inv_001`–`inv_003` in fresh sessions and reviews. Then task 8 (retro). |
 | 2026-10-24 | Claude Code | Expert ran `inv_002` and `inv_003`: both resolved correctly and used the runner, which refused in run mode (specs `draft`, code unreviewed). Routing passed; no outputs, as expected before approval. | 🛑 Stop C: `inv_001` result; expert review and approval; decide when `runs` tests happen. |
 | 2026-10-24 | Claude Code | Expert reported `inv_001` passed. | 🛑 Stop C: expert review and approval; decide when `runs` tests happen. |
+| 2026-10-24 | Claude Code | Expert's review: Indicator bodies named Cuyahoga County (separation of concerns). Applied design issue 5: `census_unit` + derived extent, runner applies crosswalks and reliability, generic rules moved to § 12 and `census_api`, publication check. Outputs byte-identical. | 🛑 Stop C: expert reviews and approves (6 specs, 2 code files); decide when `runs` tests happen. |

@@ -14,6 +14,7 @@ id_field: GEOID                              # unique code for each unit (always
 name_field: NAMELSAD                         # (optional) display name
 within: cle_city                             # (optional) keep only units inside this Geography
 within_rule: majority_area                   # (required with within) majority_area | centroid | any
+census_unit: block group                     # (optional) block group | tract: the Census API unit id_field's GEOIDs match
 ---
 
 # About

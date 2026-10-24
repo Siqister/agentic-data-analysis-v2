@@ -15,7 +15,9 @@ import sys
 
 import yaml
 
-from lib import ROOT, census, crosswalk, geography, known_answers, output
+import pandas as pd
+
+from lib import ROOT, census, crosswalk, geography, known_answers, moe, output
 from lib import validate
 from lib.choropleth import draw
 from lib.compiled import code_hash, code_path, code_status, read_header
@@ -36,16 +38,35 @@ class Context:
         self.snaps: list[Snapshot] = []
         self._geo: dict = {}
 
-    def acs(self, entry: dict, for_: str, in_: list[str]):
-        """Census API fields named in one `data` entry (with _M fields), as a table keyed by GEOID."""
+    def acs(self, entry: dict) -> pd.DataFrame:
+        """Census API fields named in one `data` entry (with _M fields), for every unit of the
+        Indicator's geography: geography_id, geography_name, the fields, and `annotation`.
+
+        The request extent comes from the units' GEOIDs (architecture.md § 4.2). A unit with
+        no row, or a field not published for any unit, stops the run (§ 12)."""
         resource = self.specs[entry["resource"]].meta
         approved = {(d["dataset"], d["vintage"]) for d in resource.get("datasets", [])}
         if (entry["dataset"], entry["vintage"]) not in approved:
             raise Stop(f"{entry['dataset']} {entry['vintage']} is not on {entry['resource']}'s approved list")
+        geo_spec = self.specs[self.spec.meta["geography"]]
+        unit = geo_spec.meta.get("census_unit")
+        if not unit:
+            raise Stop(f"{geo_spec.id} has no census_unit, so Census data can't be requested for it")
+        units = self.geography(geo_spec.id)[["geography_id", "geography_name"]]
         fields = census.with_moe(list(entry["fields"]))
-        snap = census_api(resource, entry["dataset"], entry["vintage"], fields, for_, in_)
-        self.snaps.append(snap)
-        return census.read(snap, fields)
+        raw = []
+        for for_, in_ in census.requests_for(units["geography_id"], unit):
+            snap = census_api(resource, entry["dataset"], entry["vintage"], fields, for_, in_)
+            self.snaps.append(snap)
+            raw.append(census.read(snap, fields))
+        t = units.merge(pd.concat(raw), left_on="geography_id", right_on="GEOID", how="left")
+        missing = t.loc[t["GEOID"].isna(), "geography_id"]
+        if len(missing):
+            raise Stop(f"no {entry['dataset']} row for {geo_spec.id} units: {', '.join(missing[:10])}")
+        for f in fields:
+            if t["annotation"].str.contains(f"{f} not published", regex=False).all():
+                raise Stop(f"{f} is not published at {unit} level")
+        return t.drop(columns="GEOID").reset_index(drop=True)
 
     def geography(self, geo_id: str):
         if geo_id not in self._geo:
@@ -81,7 +102,7 @@ def built_from(spec: Spec, specs: dict[str, Spec]) -> list[dict]:
             entry["verified"] = header.verified if header else None
         else:
             entry["spec_hash"] = s.meta_hash   # frontmatter only: body edits don't rerun
-        for k in ("method", "within", "within_rule"):
+        for k in ("method", "within", "within_rule", "census_unit"):
             if k in s.meta:
                 entry[k] = s.meta[k]
         out.append(entry)
@@ -118,9 +139,7 @@ def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> Non
 
     ctx = Context(ind, specs)
     module = _import(code_path(ind))
-    tables = module.compute(ctx)
-    if set(tables) != set(outputs):
-        raise Stop(f"{ind.id}: code returned {sorted(tables)}, expected {sorted(outputs)}")
+    tables = report(ind, specs, ctx, module.compute(ctx))
 
     results = {}
     for test_id, test in known_answers.load().items():
@@ -137,6 +156,32 @@ def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> Non
     for g, path in outputs.items():
         output.write_table(tables[g], path, bf, data, tests)
         print(f"  wrote {path.relative_to(ROOT)}")
+
+
+def report(ind: Spec, specs: dict[str, Spec], ctx: Context, native: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """From the compiled code's table at the Indicator's geography, the table at every geography
+    it's reported at: crosswalks applied per `measure`, then reliability (architecture.md § 12)."""
+    geo = ind.meta["geography"]
+    cols = {"geography_id", "estimate", "moe", "note"}
+    if not cols <= set(native.columns):
+        raise Stop(f"{ind.id}: code must return columns {sorted(cols)}")
+    if set(native["geography_id"]) != set(ctx.geography(geo)["geography_id"]):
+        raise Stop(f"{ind.id}: code must return one row per {geo} unit")
+    tables = {geo: native}
+    label = specs[geo].meta.get("census_unit", "unit")
+    for cw_id in ind.meta.get("crosswalks") or []:
+        to = specs[cw_id].meta["to"]
+        if ind.meta["measure"] != "count":
+            raise Stop(f"{ind.id}: moving a {ind.meta['measure']} through a crosswalk isn't built yet")
+        moved = crosswalk.apply_count(native, ctx.crosswalk(cw_id), label=label)
+        tables[to] = moved.merge(ctx.geography(to)[["geography_id", "geography_name"]], on="geography_id")
+    rel = ind.meta.get("reliability")
+    for g, t in tables.items():
+        if "geography_name" not in t.columns:
+            t = t.merge(ctx.geography(g)[["geography_id", "geography_name"]], on="geography_id")
+        tables[g] = (moe.reliability(t, rel["cv_threshold"], rel["low"]) if rel
+                     else t.assign(cv=float("nan"), reliability=""))
+    return tables
 
 
 def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) -> None:

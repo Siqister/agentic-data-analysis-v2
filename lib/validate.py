@@ -32,6 +32,7 @@ CHOICES = {
     "measure": {"percent", "rate", "count", "median", "index"},
     "unit": {"count", "dollars"},
     "within_rule": {"majority_area", "centroid", "any"},
+    "census_unit": {"block group", "tract"},
     "classification": {"quantile", "equal_interval", "natural_breaks", "manual"},
 }
 
@@ -116,6 +117,9 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
                         err(f"{f} — {entry.get('dataset')} {entry.get('vintage')} is not on {res.id}'s approved `datasets` list")
                 if not entry.get("fields"):
                     err(f"{f} — a `data` entry has no `fields`")
+                geo = specs.get(m.get("geography"))
+                if _is_census(res) and geo and not geo.meta.get("census_unit"):
+                    err(f"{f} — uses Census data, but its geography {geo.id} has no `census_unit`")
             if m.get("measure") in ("median", "index") and m.get("crosswalks") and "Aggregation" not in s.sections():
                 err(f"{f} — a {m['measure']} with crosswalks needs an `# Aggregation` section")
         if s.type == "Visualization":
@@ -233,14 +237,19 @@ def _check_tests(specs, err):
             err(f"tests/known_answers.md — {test_id}: {ind.id} is not reported at {t.get('geography')}")
 
 
+def _is_census(res) -> bool:
+    return bool(res) and str(res.meta.get("resource", "")).startswith("https://api.census.gov")
+
+
 def _check_fields(specs, r: Report):
     for s in specs.values():
         if s.type != "Indicator":
             continue
         for entry in s.meta.get("data") or []:
             res = specs.get(entry.get("resource"))
-            if not res or not res.meta["resource"].startswith("https://api.census.gov"):
+            if not _is_census(res):
                 continue
+            _check_published(s, entry, res, specs, r)
             url = f"{res.meta['resource']}/{entry['vintage']}/{entry['dataset']}/variables.json"
             try:
                 variables = requests.get(url, timeout=120).json()["variables"]
@@ -258,6 +267,40 @@ def _check_fields(specs, r: Report):
                     r.errors.append(f"{s.rel} — {code} has no margin of error field {moe}")
                 r.info.append(f"{s.rel} — {code}: spec says {meaning!r}; official label "
                               f"{v['label']!r} ({v.get('concept')})")
+
+
+def _check_published(s, entry, res, specs, r: Report):
+    """A sample request for one tract's units: a field that comes back null for every unit
+    isn't published at the geography's census_unit (architecture.md § 12)."""
+    from lib import geography
+    from lib.snapshot import _env
+    geo = specs.get(s.meta.get("geography"))
+    unit = geo.meta.get("census_unit") if geo else None
+    if not unit:
+        return
+    try:
+        gid = geography.load(geo, specs)["geography_id"].iloc[0]
+    except Exception as e:
+        r.errors.append(f"{s.rel} — couldn't load {geo.id} to check publication: {e}")
+        return
+    state, county, tract = gid[:2], gid[2:5], gid[5:11]
+    params = [("get", ",".join(entry["fields"]))]
+    if unit == "block group":
+        params += [("for", "block group:*"), ("in", f"state:{state}"), ("in", f"county:{county}"), ("in", f"tract:{tract}")]
+    else:
+        params += [("for", f"tract:{tract}"), ("in", f"state:{state}"), ("in", f"county:{county}")]
+    key = _env(res.meta.get("auth"))
+    url = f"{res.meta['resource']}/{entry['vintage']}/{entry['dataset']}"
+    try:
+        rows = requests.get(url, params=params + ([("key", key)] if key else []), timeout=120).json()
+    except Exception:
+        r.errors.append(f"{s.rel} — couldn't check whether its fields are published at {unit} level")
+        return
+    header, values = rows[0], rows[1:]
+    for code in entry["fields"]:
+        i = header.index(code)
+        if all(v[i] is None for v in values):
+            r.errors.append(f"{s.rel} — {code} is not published at {unit} level ({geo.id})")
 
 
 def main(argv=None):

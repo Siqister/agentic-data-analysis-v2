@@ -120,10 +120,24 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 | Type | What it is | Folder | Adds these fields |
 |---|---|---|---|
 | **Resource** | One API, file, or dataset | `specs/resources/` | `resource`, `auth`, `datasets` |
-| **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule` |
+| **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule`, `census_unit` |
 | **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source` |
 | **Indicator** | One measure | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability` |
 | **Visualization** | One map | `specs/visualizations/` | `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show` |
+
+### Separation of concerns
+
+Each type says one kind of thing. Specs point to each other only through frontmatter fields ([§ 5](#5-the-dependency-graph)).
+
+| Type | Says | Never says |
+|---|---|---|
+| Resource | How to access the data: request syntax, auth, approved datasets, what table codes mean | Places, or observations from one pull |
+| Geography | What the units are, the file, which units are in (`within`), and how its units match a source's units (`census_unit`) | Measures |
+| Crosswalk | How values move from one Geography to another, and the boundary effects (e.g. straddling units) | Specific measures |
+| Indicator | What is measured, and how it's computed from the named fields, at any geography | Place names, unit types, county codes, or Geography and Crosswalk IDs in the body |
+| Visualization | How one Indicator at one Geography is drawn | Computation |
+
+Test for an Indicator: changing its `geography` or `crosswalks` must not require editing its body. Checked by inspection, not by the validator.
 
 ### 4.1 Resource: the unit of access
 
@@ -156,6 +170,7 @@ One boundary file = one Geography: `bg_2020`, `tract_2020`, `cle_city`, `cle_nei
   The body explains why the rule was chosen.
 - The coordinate system is read from the file itself ([§ 12](#12-conventions)).
 - Boundary files are snapshotted like Resources ([§ 10](#10-getting-data)).
+- `census_unit` (optional): the Census Data API unit its units match, `block group` or `tract`, with `id_field` holding the Census `GEOID`. Required for a Geography that an Indicator with Census data is calculated at. The request extent is **derived, never written down**: `lib/` reads the kept units' GEOIDs (after `within`) and requests those units' states and counties, so it can't disagree with the boundary file.
 
 ### 4.3 Crosswalk
 
@@ -187,6 +202,7 @@ One measure, such as "% of households with housing cost burden."
 - **`unit`** (optional): what the values are in, for display. `count` (the default) or `dollars`. Percentages come from `measure: percent`, not `unit`.
 - **`reliability`** (survey data only) sets the CV threshold, and whether low-reliability values are flagged or suppressed.
 - **Body:** `# Definition` (universe, numerator, denominator, exclusions), `# Computation` (steps), `# Caveats`. Add `# Point rules` for point data: outside-city points, boundary points, accepted geocodes, and denominator.
+- **The body is about the measure, not the place** ([Separation of concerns](#separation-of-concerns)). Steps that are the same for every Indicator are done by `lib/` and aren't repeated: pulling the fields for the geography's units, joining them to the units (§ 12), applying the listed crosswalks, and computing reliability at every geography. The compiled code returns one table at the Indicator's `geography`; the runner does the rest.
 
 ### 4.5 Visualization
 
@@ -266,7 +282,7 @@ Compiled code is tracked in git.
 | Helper | What it does |
 |---|---|
 | Fetch & load | Fetch a request from a Resource into a snapshot; load snapshots and Geographies |
-| Runner | Walk the graph from a requested spec, check staleness, fetch, compute, test, and write outputs ([§ 2](#invocation)) |
+| Runner | Walk the graph from a requested spec, check staleness, fetch, compute, apply crosswalks and reliability, test, and write outputs ([§ 2](#invocation)) |
 | Build crosswalk | Build a weights table using one of the allowed methods |
 | Apply crosswalk | Move counts and their margins of error between geographies |
 | Rate from counts | Percentage or rate from numerator and denominator counts, with margin of error |
@@ -425,7 +441,10 @@ cleveland-analysis/
 ### Uncertainty (ACS)
 
 - Carry margins of error (90% confidence) through every step, using Census Bureau formulas. For example, the margin of error of a sum is √(sum of squared MOEs).
-- CV = (MOE ÷ 1.645) ÷ estimate. A suggested threshold is 0.30, set per Indicator.
+- CV = (MOE ÷ 1.645) ÷ estimate. A suggested threshold is 0.30, set per Indicator. `reliability` is `low` above it, otherwise `ok`, at every geography the Indicator is reported at.
+- An estimate of 0 has no CV: `cv` is blank, `reliability` is `low`, and `note` says "estimate is 0; CV undefined".
+- A blank `estimate` or `moe` has no CV: `cv` and `reliability` are blank.
+- **Counts through a crosswalk:** estimate = Σ weight × estimate, MOE = √Σ (weight × MOE)². If some units have a blank estimate or MOE, the sums use the units that have one, and `note` says how many were left out of each.
 
 ### Output tables (CSV)
 
@@ -442,6 +461,7 @@ cleveland-analysis/
 - Values are stored at full precision and rounded only for display: percentages to 1 decimal place, counts and dollars to whole numbers (dollars with a `$`).
 - **Missing or suppressed values are left blank, never 0**, with the reason in `note`.
 - **Compute with flagged uncertainty rather than stop.** When some inputs are blank, compute from the ones that have values and say what was left out in `note`. Stop only for structural problems (a missing unit, a broken join, a spec that doesn't say what to do), never because data is incomplete. (Expert's principle, chunk 2.)
+- **Not published at a level:** the Census Data API returns `null` for a field that isn't published at a geography's `census_unit`. If every unit is `null`, the run stops (structural). If only some are, those values are blank with "not published" in `note`.
 - **A missing unit is an error; a blank value is not.** Every unit of the geography gets a row. A unit with no row in the source stops the run. A unit whose value is blank (an annotation, a coded value, suppression), with its reason in `note`, is a normal result, and its `reliability` is blank.
 
 ### Maps
