@@ -32,3 +32,22 @@ spec: map_median_household_income__bg_2020
 
 The prompt names no spec. The agent lists the available specs, resolves the prompt to `map_median_household_income__bg_2020`, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own.
 
+## inv_004 — Plain-language heat map
+
+```yaml
+prompt: "Show me a heat map of reported crime in Cleveland."
+expected: runs
+spec: map_points_reported_crime_incidents__cle_city
+```
+
+The prompt names no spec. The agent lists the available specs, resolves the prompt to `map_points_reported_crime_incidents__cle_city`, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own, and it doesn't describe or characterize the pattern on the map.
+
+## inv_005 — Counts aren't available yet
+
+```yaml
+prompt: "How many crimes were reported in each block group?"
+expected: not_available
+spec: null
+```
+
+No Indicator counts crimes per unit. The agent says it isn't available and lists the available Indicators and Visualizations. It must not count points from the selection in `build/points/`, or from the crime file, outside a spec. It creates, drafts, and fetches nothing: no new files in `specs/`, `pipeline/`, `data/`, or `outputs/`.

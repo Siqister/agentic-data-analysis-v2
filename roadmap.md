@@ -110,7 +110,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/03-crime-heatmap`
 
-**Status:** ✅ Stop A passed 2026-10-24: requirements approved by the expert, including the proposed fixes for design issues 1–10 (5 dropped) and the agent's defaults for the Stop A questions (decisions 18–21). Tasks 1–2 done 2026-10-24 (branch created; design issues 1–10 applied to docs, templates and validator). Next: task 3.
+**Status:** ✅ Stop A passed 2026-10-24: requirements approved by the expert, including the proposed fixes for design issues 1–10 (5 dropped) and the agent's defaults for the Stop A questions (decisions 18–21). Tasks 1–3 done 2026-10-24. 🛑 **Stop B:** the expert answers the Stop B questions and approves the three specs, `inv_004` and `inv_005`. Then task 4.
 
 **Exercises (capability checklist):**
 - Existing items: local file resource, point dataset.
@@ -235,6 +235,16 @@ Proposed: apply 1–10 before drafting specs.
 #### Stop A questions
 
 Answered 2026-10-24: the expert accepted the agent's suggested default for each. Recorded as decisions 18–21.
+
+#### Stop B questions
+
+Raised 2026-10-24 when drafting the specs. Each is written into the draft as shown; the expert confirms or changes it.
+
+1. **Unknown offense type.** An `IncidentDesc` value on neither the Group A nor the Group B list stops the run until the Resource's lists are updated (Computation step 2). The lists hold exactly the 57 values in the 2026-10-24 file. Alternative: exclude unknown values with their own reason and continue.
+2. **Missing case number or offense date.** A kept row with no `OffenseDate` is excluded as "no offense date"; one with no `CaseNumber` as "no case number". In this file, all 15 such rows also have no `IncidentDesc`, so neither reason removes anything now.
+3. **Extra rows in an incident** are recorded in the manifest as "additional offense in the same incident", so the `excluded` block accounts for every row read.
+4. **Source note** on the map: "Crimes reported to police, not all crimes. Points are aggregated into hexagons; no individual locations are shown." Data sources are added automatically.
+5. **Order of steps** (for the exclusion counts): offense type, then window, then one point per incident, then point rules. `lib/` applies the window, but at step 3 of this order.
 
 #### Tasks
 
@@ -411,3 +421,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Chat | ✅ Stop A passed: expert approved chunk 3 requirements and design issues 1–10 (5 dropped); Stop A questions settled with the agent's defaults (decisions 18–21: empty hexes gray, edge hexes clipped, origin (0, 0) in `lib/`, `Purples`). | Claude Code: task 1 (commit the plan on `main`, create the branch). Stop B after specs are drafted. |
 | 2026-10-24 | Claude Code | Task 1: committed the chunk 3 plan on `main` (`54d7bd3`); created `chunk/03-crime-heatmap`. | Task 2: apply design issues 1–10. |
 | 2026-10-24 | Claude Code | Task 2: applied design issues 1–10 to architecture.md (§§ 1, 4, 4.4 selections, 4.5 hexbin, 7, 8, 10, 11, 12 dates/privacy/maps; *Other chart types* removed from § 13), AGENTS.md glossary, Indicator and Visualization templates, validation.md, and `lib/validate.py` (`points` measure, `window`, file-Resource `data` entries, `map`/`hex_size_m` with the 250 m floor, offline field check for local file Resources). Checked each new validator rule against throwaway specs, including the field check against the crime GeoPackage. Validation clean. The `lib/` change marks existing results for rerun (no recompile). Left for task 4: runner, `ctx.features`, `heatmap.py`, `source_note`. Left for the retro: the definition-of-done exception. | Task 3: draft the three specs, `inv_004`, `inv_005`; 🛑 Stop B. |
+\n| 2026-10-24 | Claude Code | Task 3: drafted `cle_crime`, `points_reported_crime_incidents`, `map_points_reported_crime_incidents__cle_city`; updated the three `index.md` files; added `inv_004`, `inv_005`. Checked the Resource's Group A/B lists against the file (47 + 10 values, exact match). Field check passes; the only validation error is the expected missing compiled code. 5 Stop B questions recorded. | 🛑 Stop B: expert answers the questions and approves the specs. Then task 4. |\n
