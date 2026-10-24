@@ -257,7 +257,8 @@ Raised 2026-10-24 when drafting the specs. Answered 2026-10-24: the expert accep
 - Spec validation: no errors. Warnings only for draft specs and unreviewed code.
 - To review: `lib/points.py` and `lib/heatmap.py` (new); `lib/runner.py`, `lib/output.py`, `lib/validate.py`; `pipeline/indicators/points_reported_crime_incidents.py`.
 
-**Questions**
+**Questions** (expert's answers 2026-10-24: 1 keep the strict boundary clip; 2 keep 500 m; 3 keep `Purples` as is; 4 keep the breaks in the manifest; 5 no change for now, the staleness gap is accepted; 6 fine; 7 fine; 8 open)
+
 1. **Boundary points.** 71 points with `City` = Cleveland fall outside the boundary, median 0.3 m (75% within 0.4 m, max 91 m): addresses on boundary streets. 9 points with another `City` fall inside. The spec clips strictly against the boundary, so the 71 are excluded. Keep it, or add a tolerance (a spec change)?
 2. **Hex size.** 500 m now. Tune by editing `hex_size_m` and rerunning (no recompile).
 3. **Lightest class.** `Purples` class 1 (`#f2f0f7`) is close to the white page and to the gray of empty hexes in tone. Keep, or change `colors` or the page background?
@@ -445,3 +446,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Task 3: drafted `cle_crime`, `points_reported_crime_incidents`, `map_points_reported_crime_incidents__cle_city`; updated the three `index.md` files; added `inv_004`, `inv_005`. Checked the Resource's Group A/B lists against the file (47 + 10 values, exact match). Field check passes; the only validation error is the expected missing compiled code. 5 Stop B questions recorded. | 🛑 Stop B: expert answers the questions and approves the specs. Then task 4. |
 | 2026-10-24 | Claude Code | ✅ Stop B passed: expert approved `cle_crime`, `points_reported_crime_incidents`, `map_points_reported_crime_incidents__cle_city`, `inv_004`, `inv_005`, with the defaults for Stop B questions 1–5. | Task 4. |
 | 2026-10-24 | Claude Code | Tasks 4–5: added `lib/points.py`, `lib/heatmap.py`, the points path and hexbin branch in `lib/runner.py`, `write_points` in `lib/output.py`, `source_note` changes; compiled `points_reported_crime_incidents`. Produced the selection (31,297 points) and the heat map. Expected size matches except 63 boundary points (median 0.3 m outside). Existing outputs unchanged; `kat_001`, `kat_002` pass. 8 Stop C questions recorded. | 🛑 Stop C: expert reviews, answers the questions, runs `inv_001`–`inv_005` in fresh sessions. Then task 6. |
+| 2026-10-24 | Claude Code | Expert answered Stop C questions 1–7: keep the boundary clip, 500 m, `Purples`, the manifest breaks, the source-note behaviour; offense lists in code and the "No incidents" label are fine. | 🛑 Stop C: question 8, approval, `inv_001`–`inv_005`. |
