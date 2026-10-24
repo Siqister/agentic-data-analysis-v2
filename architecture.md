@@ -221,6 +221,7 @@ One map. **`map`** (optional) sets the kind: `choropleth` (the default) or `hexb
 
 - Classification (`classification`, `classes`, `breaks`) and `colors` are always set in the spec, **never chosen by the agent**.
 - Output: a self-contained HTML file using D3 v7 (pinned version), with its data embedded.
+- The page's source note lists the Resource and Geography titles (plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.".
 
 **Choropleth.** Its `indicator` is not a `points` Indicator.
 - **`indicator`** sets the color. **`geography`** must be one the Indicator is reported at.
@@ -288,6 +289,8 @@ Code without a `verified` line is unreviewed and can't run in run mode.
 | A new data snapshot | Results of everything above it **rerun**. |
 | Any file in `lib/` | **All** results rerun. `lib/` changes are reviewed, so no recompile is needed. |
 | Only a spec's `status` | **Nothing.** `status` records approval, not content, so it's left out of spec hashes. |
+
+Known gap, accepted by the expert (chunk 3): a Visualization's `# Source note` text is body, so editing it doesn't redraw the map. Redraw with `run <id> --mode author --force`.
 
 "Rerun" means running already-reviewed code again. "Recompile" means generating new code, which then needs the expert's review.
 
