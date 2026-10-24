@@ -110,7 +110,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/03-crime-heatmap`
 
-**Status:** ✅ Stop A passed 2026-10-24: requirements approved by the expert, including the proposed fixes for design issues 1–10 (5 dropped) and the agent's defaults for the Stop A questions (decisions 18–21). Tasks 1–3 done 2026-10-24. ✅ Stop B passed 2026-10-24: the expert approved the three specs, `inv_004` and `inv_005`, with the agent's defaults for Stop B questions 1–5. Next: task 4.
+**Status:** ✅ Stop A passed 2026-10-24: requirements approved by the expert, including the proposed fixes for design issues 1–10 (5 dropped) and the agent's defaults for the Stop A questions (decisions 18–21). Tasks 1–5 done 2026-10-24 (✅ Stop B passed). 🛑 **Stop C:** the expert reviews the outputs, code and `lib/` changes, answers the Stop C questions, tunes `hex_size_m` if wanted, and runs `inv_001`–`inv_005` in fresh sessions. Then task 6 (retro).
 
 **Exercises (capability checklist):**
 - Existing items: local file resource, point dataset.
@@ -245,6 +245,27 @@ Raised 2026-10-24 when drafting the specs. Answered 2026-10-24: the expert accep
 3. **Extra rows in an incident** are recorded in the manifest as "additional offense in the same incident", so the `excluded` block accounts for every row read.
 4. **Source note** on the map: "Crimes reported to police, not all crimes. Points are aggregated into hexagons; no individual locations are shown." Data sources are added automatically.
 5. **Order of steps** (for the exclusion counts): offense type, then window, then one point per incident, then point rules. `lib/` applies the window, but at step 3 of this order.
+
+#### Stop C results and questions
+
+**Results** (2026-10-24, author mode)
+- Selection: **31,297 points**. Excluded rows: no `IncidentDesc` 18,507 · Group B 5,722 · Justifiable Homicide 1 · no offense date 0 · outside the window 8,896 · no case number 0 · additional offense in the same incident 5,029 · no point 106 · outside the clip extent 191. Excluded + kept = 69,749, every row in the file.
+- Against the expected size: 31,594 before the point rules (exact match); 106 with no point (exact match); 191 outside the boundary vs about 129 by the `City` field, so 63 fewer points than the expected ~31,360 (question 1).
+- Map: 1,103 hexes at 500 m, 210 empty; 173–185 hexes per class. The HTML embeds only hex shapes and `cls`; no points, counts or case fields.
+- Hex assignment checked against point-in-polygon (20,000 random points, 0 misassigned); hex width is exactly 500 m.
+- Existing outputs: `median_household_income` table and map byte-identical after the `lib/` changes; `kat_001` pass (+0.07%), `kat_002` pass (exact). `population_count` outputs regenerated (they were missing).
+- Spec validation: no errors. Warnings only for draft specs and unreviewed code.
+- To review: `lib/points.py` and `lib/heatmap.py` (new); `lib/runner.py`, `lib/output.py`, `lib/validate.py`; `pipeline/indicators/points_reported_crime_incidents.py`.
+
+**Questions**
+1. **Boundary points.** 71 points with `City` = Cleveland fall outside the boundary, median 0.3 m (75% within 0.4 m, max 91 m): addresses on boundary streets. 9 points with another `City` fall inside. The spec clips strictly against the boundary, so the 71 are excluded. Keep it, or add a tolerance (a spec change)?
+2. **Hex size.** 500 m now. Tune by editing `hex_size_m` and rerunning (no recompile).
+3. **Lightest class.** `Purples` class 1 (`#f2f0f7`) is close to the white page and to the gray of empty hexes in tone. Keep, or change `colors` or the page background?
+4. **Counts in the map manifest.** The HTML has no counts, but its manifest records the class breaks in points per hex (8, 19, 37, 58) and hexes per class, as the choropleth manifest records its breaks. Keep, or drop the breaks?
+5. **Source note staleness.** The Visualization's `# Source note` text now goes into the HTML (it was never used before; chunks 1–2 said "None."). But § 6 says a body-only change to a spec without compiled code triggers nothing, so editing that text wouldn't redraw the map. Fix by including that section in the Visualization's hash, or move the text to frontmatter?
+6. **Group lists in compiled code.** The Group A/B lists are copied from `cle_crime` into the compiled code (like chunk 2's coded values from `census_api`). A change to the Resource's lists doesn't make the code stale; an unknown value still stops the run.
+7. **"No incidents"** is hard-coded in `lib/heatmap.py` (decision 18). A later selection of something other than incidents would need its own label.
+8. **Dependencies.** `lib/` now imports `pyogrio` and `pyproj` directly. Both are geopandas dependencies pinned in `uv.lock`, but not listed in `pyproject.toml`. Add them?
 
 #### Tasks
 
@@ -423,3 +444,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Task 2: applied design issues 1–10 to architecture.md (§§ 1, 4, 4.4 selections, 4.5 hexbin, 7, 8, 10, 11, 12 dates/privacy/maps; *Other chart types* removed from § 13), AGENTS.md glossary, Indicator and Visualization templates, validation.md, and `lib/validate.py` (`points` measure, `window`, file-Resource `data` entries, `map`/`hex_size_m` with the 250 m floor, offline field check for local file Resources). Checked each new validator rule against throwaway specs, including the field check against the crime GeoPackage. Validation clean. The `lib/` change marks existing results for rerun (no recompile). Left for task 4: runner, `ctx.features`, `heatmap.py`, `source_note`. Left for the retro: the definition-of-done exception. | Task 3: draft the three specs, `inv_004`, `inv_005`; 🛑 Stop B. |
 | 2026-10-24 | Claude Code | Task 3: drafted `cle_crime`, `points_reported_crime_incidents`, `map_points_reported_crime_incidents__cle_city`; updated the three `index.md` files; added `inv_004`, `inv_005`. Checked the Resource's Group A/B lists against the file (47 + 10 values, exact match). Field check passes; the only validation error is the expected missing compiled code. 5 Stop B questions recorded. | 🛑 Stop B: expert answers the questions and approves the specs. Then task 4. |
 | 2026-10-24 | Claude Code | ✅ Stop B passed: expert approved `cle_crime`, `points_reported_crime_incidents`, `map_points_reported_crime_incidents__cle_city`, `inv_004`, `inv_005`, with the defaults for Stop B questions 1–5. | Task 4. |
+| 2026-10-24 | Claude Code | Tasks 4–5: added `lib/points.py`, `lib/heatmap.py`, the points path and hexbin branch in `lib/runner.py`, `write_points` in `lib/output.py`, `source_note` changes; compiled `points_reported_crime_incidents`. Produced the selection (31,297 points) and the heat map. Expected size matches except 63 boundary points (median 0.3 m outside). Existing outputs unchanged; `kat_001`, `kat_002` pass. 8 Stop C questions recorded. | 🛑 Stop C: expert reviews, answers the questions, runs `inv_001`–`inv_005` in fresh sessions. Then task 6. |
