@@ -2,7 +2,7 @@
 type: Crosswalk
 title: Block groups (2020) → City of Cleveland
 description: Assigns every Cleveland block group, whole, to the city.
-status: draft
+status: stable
 
 from: bg_2020
 to: cle_city

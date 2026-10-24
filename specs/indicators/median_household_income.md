@@ -2,7 +2,7 @@
 type: Indicator
 title: Median household income
 description: Median household income in the past 12 months, in 2024 dollars, from the ACS 5-year estimates.
-status: draft
+status: stable
 tags: [income]
 
 measure: median

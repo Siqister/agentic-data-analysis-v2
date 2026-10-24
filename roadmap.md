@@ -105,7 +105,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/02-bg-median-income`
 
-**Status:** 🛑 **At Stop C** (2026-10-24). Tasks 6–7 done, then design issue 5 (separation of concerns) applied after the expert's review; see [Stop C review](#stop-c-review-chunk-2). Waiting for the expert's review and approval. Then task 8 (retro).
+**Status:** 🛑 **At Stop C** (2026-10-24). Tasks 6–7 done, then design issue 5 (separation of concerns) applied after the expert's review; see [Stop C review](#stop-c-review-chunk-2). ✅ Expert approved all changes (2026-10-24): six specs `stable`, both code files `verified` (set by the agent on the expert's instruction). Validation 0 errors, 0 warnings. Next: the expert reruns `inv_002` and `inv_003` in fresh sessions, now that run mode can run. Then task 8 (retro).
 
 **Exercises (capability checklist):** no new item; it reuses API resource, `within`, reliability flag and choropleth. New smaller cases, below the level of the checklist: `measure: median` with no crosswalks, blank values that are expected rather than errors, table-specific top- and bottom-coded values, and a dollar format on the map.
 
@@ -201,6 +201,7 @@ Applied 1–4 on 2026-10-24: `inv_001` prompt → "Show me median gross rent by 
 - `inv_001` ("Show me median gross rent by block group."): ✅ **pass** (reported by the expert).
 - `inv_002` ("Map the population count by block group in Cleveland."): resolved to `map_population_count__bg_2020` and went through `lib.runner`. The runner, in run mode (the default), refused: `population_count` is `draft` with unreviewed code. **Routing passed; no output**, as run mode requires.
 - `inv_003` ("Map median household income by block group in Cleveland."): resolved to `map_median_household_income__bg_2020` and went through `lib.runner`. Run mode refused: the map and Indicator are `draft`, and the code is unreviewed. **Routing passed; no output**, as run mode requires.
+- **Decision (expert, 2026-10-24): option (a).** Approve first, then run the `runs` tests. `inv_002` and `inv_003` will be rerun after approval.
 - **Retro note:** `runs` tests run before approval always hit run mode's refusal, so they test routing but not the run itself. Options: (a) at Stop C, approve first (`verified`, `stable`), then run the invocation tests; (b) define `runs` as "resolves to `spec` and invokes the runner", and accept a readiness refusal as a pass while specs are `draft`.
 
 **Design issue 5 applied (2026-10-24)**
@@ -304,3 +305,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Expert ran `inv_002` and `inv_003`: both resolved correctly and used the runner, which refused in run mode (specs `draft`, code unreviewed). Routing passed; no outputs, as expected before approval. | 🛑 Stop C: `inv_001` result; expert review and approval; decide when `runs` tests happen. |
 | 2026-10-24 | Claude Code | Expert reported `inv_001` passed. | 🛑 Stop C: expert review and approval; decide when `runs` tests happen. |
 | 2026-10-24 | Claude Code | Expert's review: Indicator bodies named Cuyahoga County (separation of concerns). Applied design issue 5: `census_unit` + derived extent, runner applies crosswalks and reliability, generic rules moved to § 12 and `census_api`, publication check. Outputs byte-identical. | 🛑 Stop C: expert reviews and approves (6 specs, 2 code files); decide when `runs` tests happen. |
+| 2026-10-24 | Claude Code | Expert approved all changes: 6 specs `stable`, 2 code files `verified`. `runs` tests happen after approval (option a). Validation clean; all outputs up to date. | Expert reruns `inv_002` and `inv_003` in fresh sessions. Then task 8 (retro). |
