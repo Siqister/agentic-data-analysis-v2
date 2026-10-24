@@ -34,14 +34,14 @@ This file holds every requirement for building the project. [AGENTS.md](AGENTS.m
 
 - A **one-time study** of Cleveland, Ohio.
 - Geographies: **city, neighborhoods** (from a shapefile), **census tracts**, and **census block groups**. Block groups are the smallest unit we report.
-- Outputs: **CSV tables**, plus **interactive choropleth maps with tooltips** as self-contained D3 HTML files.
+- Outputs: **CSV tables**, plus **interactive maps** as self-contained D3 HTML files: choropleths with tooltips, and hexbin heat maps.
+- A **heat map** shows a pattern below block-group level, aggregated into hexes no smaller than the privacy floor ([§ 12](#privacy)). It shows relative classes, not values.
 - Code runs **locally** through Claude Code on the expert's computer.
 - Evaluation: **known-answer tests** only ([tests/validation.md](tests/validation.md)).
 
 **Not in scope now:**
 - Interpreting results.
-- Reporting below block-group level.
-- Map types other than choropleths.
+- Reporting values below block-group level.
 - Running in the cloud or on Claude.ai.
 
 ---
@@ -122,8 +122,8 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 | **Resource** | One API, file, or dataset | `specs/resources/` | `resource`, `auth`, `datasets` |
 | **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule`, `census_unit` |
 | **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source` |
-| **Indicator** | One measure | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability` |
-| **Visualization** | One map | `specs/visualizations/` | `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show` |
+| **Indicator** | One measure, or a reviewed selection of points | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability`, `window` |
+| **Visualization** | One map | `specs/visualizations/` | `map`, `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show`, `hex_size_m` |
 
 ### Separation of concerns
 
@@ -134,7 +134,7 @@ Each type says one kind of thing. Specs point to each other only through frontma
 | Resource | How to access the data: request syntax, auth, approved datasets, what table codes mean | Places, or observations from one pull |
 | Geography | What the units are, the file, which units are in (`within`), and how its units match a source's units (`census_unit`) | Measures |
 | Crosswalk | How values move from one Geography to another, and the boundary effects (e.g. straddling units) | Specific measures |
-| Indicator | What is measured, and how it's computed from the named fields, at any geography | Place names, unit types, county codes, or Geography and Crosswalk IDs in the body |
+| Indicator | What is measured (or selected), and how it's computed from the named fields, at any geography | Place names, unit types, county codes, or Geography and Crosswalk IDs in the body |
 | Visualization | How one Indicator at one Geography is drawn | Computation |
 
 Test for an Indicator: changing its `geography` or `crosswalks` must not require editing its body. Checked by inspection, not by the validator.
@@ -191,11 +191,11 @@ Moves data from one Geography (`from`) to another (`to`) by producing a **weight
 
 ### 4.4 Indicator
 
-One measure, such as "% of households with housing cost burden."
+One measure, such as "% of households with housing cost burden", or a reviewed selection of points ([below](#selections-measure-points)).
 
 - **`geography`** is where it's calculated, usually `bg_2020`. It's also reported there.
 - **`crosswalks`** lists the extra geographies it's reported at. Each crosswalk's `to` is an output geography, and its `from` must equal the Indicator's `geography`.
-- **`data`** names exactly what to pull: Resource, dataset, vintage, and each field with its plain meaning. For Census data, the matching `_M` (margin of error) field is pulled automatically for every `_E` field.
+- **`data`** names exactly what to pull: Resource, dataset, vintage, and each field with its plain meaning. For Census data, the matching `_M` (margin of error) field is pulled automatically for every `_E` field. For a file Resource (no `datasets`), an entry has `resource` and `fields` only, and `lib/` reads only those fields.
 - **`measure`** decides how values move to other geographies:
   - `percent`, `rate`, `count`: move the counts, then compute ([§ 12](#12-conventions)).
   - `median`, `index`: with crosswalks, the body needs an `# Aggregation` section explaining a valid method.
@@ -204,14 +204,35 @@ One measure, such as "% of households with housing cost burden."
 - **Body:** `# Definition` (universe, numerator, denominator, exclusions), `# Computation` (steps), `# Caveats`. Add `# Point rules` for point data: outside-city points, boundary points, accepted geocodes, and denominator.
 - **The body is about the measure, not the place** ([Separation of concerns](#separation-of-concerns)). Steps that are the same for every Indicator are done by `lib/` and aren't repeated: pulling the fields for the geography's units, joining them to the units (§ 12), applying the listed crosswalks, and computing reliability at every geography. The compiled code returns one table at the Indicator's `geography`; the runner does the rest.
 
+#### Selections (`measure: points`)
+
+A selection is a reviewed set of points, e.g. the reported crime incidents in a time window. Later Indicators can build on it (`builds_on`), e.g. to count points per unit. A different selection (say, property crimes only) is a new Indicator, not a parameter.
+
+- **ID** starts with `points_` ([§ 12](#naming)). The time window doesn't go in the ID, the way the ACS vintage doesn't.
+- **`geography`** is the clip extent: points outside its boundary are excluded. There are no `crosswalks`, `reliability` or `unit`.
+- **`window`** (optional): `{ field, from, to }`, ISO dates, both inclusive. `field` is one of the Indicator's `data` fields. Dates are local dates ([§ 12](#dates-and-times)); `lib/` converts the times before comparing, so compiled code doesn't repeat it. Changing the window changes the spec, so the code is stale.
+- **The Indicator does all the filtering**, so its body may name its Resource's fields. Still no place names. Such an Indicator is tied to one Resource by nature, so it's less reusable than a Census Indicator.
+- **Body:** `# Definition`, `# Computation`, `# Point rules`, `# Caveats`.
+- **Compiled code** returns a point table (the fields the body names, geometry in EPSG:3734) plus the number of rows excluded at each step, by reason. The runner writes it to `build/points/<id>__<geography>.gpkg` with a manifest ([§ 8](#8-manifests)). It skips the per-unit table checks and reliability. A selection is never published: it stays in `build/`, and maps embed only aggregated hexes ([§ 12](#privacy)).
+
 ### 4.5 Visualization
 
-One map. For now, always a choropleth with hover tooltips.
+One map. **`map`** (optional) sets the kind: `choropleth` (the default) or `hexbin`.
 
-- **`indicator`** sets the color. **`geography`** must be one the Indicator is reported at.
 - Classification (`classification`, `classes`, `breaks`) and `colors` are always set in the spec, **never chosen by the agent**.
-- The tooltip shows the unit's name, the estimate, the margin of error, and the reliability. It also shows any `also_show` Indicators.
 - Output: a self-contained HTML file using D3 v7 (pinned version), with its data embedded.
+- The page's source note lists the Resource and Geography titles (plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.".
+
+**Choropleth.** Its `indicator` is not a `points` Indicator.
+- **`indicator`** sets the color. **`geography`** must be one the Indicator is reported at.
+- The tooltip shows the unit's name, the estimate, the margin of error, and the reliability. It also shows any `also_show` Indicators.
+
+**Hexbin heat map.** Its `indicator` is a `points` Indicator, and `geography` is that Indicator's `geography`.
+- **`hex_size_m`** (required): hex width across flats, in metres, at least the privacy floor ([§ 12](#privacy)).
+- Pointy-top hexes in EPSG:3734, on a grid whose origin is fixed in `lib/` at (0, 0), so reruns and every hexbin map share the grid. Hexes that intersect the geography are kept and clipped to its outline.
+- Points are counted per hex, and hexes are classed by `classification` over the hexes with at least one point.
+- The HTML embeds only hex shapes (EPSG:4326) and their class labels, never points or counts. The tooltip shows the class ("2 of 5"); the legend runs low to high with no counts.
+- `# Design choices` explains the hex size, and says that the pattern depends on hex size and grid origin and that classes are relative.
 
 ---
 
@@ -269,6 +290,8 @@ Code without a `verified` line is unreviewed and can't run in run mode.
 | Any file in `lib/` | **All** results rerun. `lib/` changes are reviewed, so no recompile is needed. |
 | Only a spec's `status` | **Nothing.** `status` records approval, not content, so it's left out of spec hashes. |
 
+Known gap, accepted by the expert (chunk 3): a Visualization's `# Source note` text is body, so editing it doesn't redraw the map. Redraw with `run <id> --mode author --force`.
+
 "Rerun" means running already-reviewed code again. "Recompile" means generating new code, which then needs the expert's review.
 
 Compiled code is tracked in git.
@@ -281,8 +304,9 @@ Compiled code is tracked in git.
 
 | Helper | What it does |
 |---|---|
-| Fetch & load | Fetch a request from a Resource into a snapshot; load snapshots and Geographies |
+| Fetch & load | Fetch a request from a Resource into a snapshot; load snapshots and Geographies; read only the named fields of a file Resource |
 | Runner | Walk the graph from a requested spec, check staleness, fetch, compute, apply crosswalks and reliability, test, and write outputs ([§ 2](#invocation)) |
+| Selection | For a `points` Indicator: apply the `window` in local dates, then write the compiled code's points and exclusion counts to `build/points/` |
 | Build crosswalk | Build a weights table using one of the allowed methods |
 | Apply crosswalk | Move counts and their margins of error between geographies |
 | Rate from counts | Percentage or rate from numerator and denominator counts, with margin of error |
@@ -290,6 +314,7 @@ Compiled code is tracked in git.
 | Reliability | Compute CV and flag or suppress values per the Indicator's settings |
 | Point aggregation | Count points within polygons, following the Indicator's point rules |
 | Draw choropleth | Produce the HTML map from a Visualization spec |
+| Draw heat map | Build the hex grid, count a selection's points per hex, class the hexes, and produce the HTML map |
 | Write output | Write a CSV or HTML file together with its manifest |
 
 Compiled Indicator code should be **short**: mostly calls to these helpers.
@@ -322,6 +347,15 @@ known_answer_tests:
 ```
 
 The manifest also records `lib_hash` (one hash of everything in `lib/`) and a `fingerprint` of all the hashes above. The runner compares them with the current state to decide whether the output is stale.
+
+A selection's manifest (`build/points/…gpkg.manifest.yaml`) works the same way and adds an `excluded` block: each reason, with the number of rows it removed.
+
+```yaml
+excluded:
+  not a Group A offense: …     # example reasons
+  outside the window: …
+  no point: …
+```
 
 HTML maps also show a short source note on the page, generated from the manifest.
 
@@ -362,7 +396,7 @@ HTML maps also show a short source note on the page, generated from the manifest
   hash: sha256:5be1…
   ```
 
-  File-based Resources are snapshotted the same way, as one request for the whole file.
+  A file Resource at a URL is snapshotted the same way, as one request for the whole file. One whose `resource` is a local file is hashed in place, like a local Geography (below).
 - **Geography boundary files are snapshotted too.**
   - A Geography whose `resource` is a **URL** is fetched once into `data/raw/<geography id>/<hash>/`, with a `snapshot.yaml` recording the URL, retrieval time, and hash.
   - A Geography whose `resource` is a **local file** is hashed in place; it is not copied.
@@ -397,6 +431,7 @@ cleveland-analysis/
 ├── data/raw/               snapshots (not committed)
 ├── data/static/            local files added by hand, e.g. boundary files (not committed)
 ├── build/                  intermediate results, e.g. crosswalk weights (not committed)
+│   └── points/             selections from points Indicators + manifest (never published)
 ├── outputs/                (not committed)
 │   ├── tables/             CSV + manifest
 │   └── visualizations/     HTML + manifest
@@ -422,6 +457,7 @@ cleveland-analysis/
   | Geography | `<unit>_<boundary year>`, or a `cle_` prefix for city-specific ones | `bg_2020`, `cle_neighborhoods` |
   | Crosswalk | `<from>__to__<to>` | `bg_2020__to__cle_neighborhoods` |
   | Indicator | what it measures, not where | `housing_cost_burden_pct` |
+  | Indicator (selection) | `points_<what it selects>` | `points_reported_crime_incidents` |
   | Visualization | `map_<indicator>__<geography>` | `map_housing_cost_burden_pct__cle_neighborhoods` |
 
 - Output files: `outputs/tables/<indicator>__<geography>.csv` and `outputs/visualizations/<visualization id>.html`.
@@ -431,6 +467,15 @@ cleveland-analysis/
 - Block groups are the smallest reporting unit. 2020 census boundaries are the default.
 - `GEOID`s and other unit codes are always **text**, so leading zeros are kept.
 - **Coordinate systems** are read from each file. A file with no coordinate system is an error, never a guess. Area and distance calculations use NAD83 / Ohio North (EPSG:3734). Web maps use WGS84 (EPSG:4326).
+
+### Dates and times
+
+- Dates are **local dates in America/New_York**. A time stored in UTC is converted before its date is taken: an evening incident has the next day's UTC date. `lib/` does this for `window`.
+
+### Privacy
+
+- **Hex floor:** a hexbin map's `hex_size_m` is at least **250 m** across flats. Checked by the validator. Sparse hexes are not suppressed.
+- **No raw points in any output.** Maps embed only aggregated hexes and their classes. Selections stay in `build/`, which is never committed or published.
 
 ### Counts first, then rates
 
@@ -467,6 +512,7 @@ cleveland-analysis/
 ### Maps
 
 - Units with no value are drawn light gray (`#d9d9d9`).
+- **Hexbin maps:** hexes inside the geography with no points are drawn light gray (`#d9d9d9`) and labelled as having none (e.g. "no incidents"); classes are computed over hexes with at least one point. Edge hexes are clipped to the geography's outline, so they cover less area and tend to fall in a lower class.
 - Titles describe what is measured, never what it shows.
 
 ### Tech stack
@@ -488,7 +534,6 @@ Agreed during design, but not part of the first build.
 | **Other evaluation layers** | Invariant checks (percentages between 0 and 100, numerator ≤ denominator, parts add up to the city total). Independent re-implementation. Map checks. A log of human corrections. A second-city test. |
 | **Golden indicator set** | 5–10 indicators with trusted published values to anchor the known-answer tests. |
 | **Visualization rules** | Data-quality notes on maps, how unreliable values look, shared color scales across related maps. |
-| **Other chart types** | Adds a `chart` field to Visualizations; choropleth stays the default. |
 | **Non-expert parameters** | Pre-approved settings run-mode users may change, e.g. survey year. |
 | **Data-source proposals log** | A place for the agent's suggested new sources. For now, they're raised in conversation. |
 | **More OKF features** | `sources`, `stale_after`, attested computation, `log.md`. |

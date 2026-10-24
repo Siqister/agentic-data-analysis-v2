@@ -10,14 +10,16 @@ outputs with manifests.
 """
 
 import argparse
+import dataclasses
 import importlib.util
 import sys
 
 import yaml
 
+import geopandas as gpd
 import pandas as pd
 
-from lib import ROOT, census, crosswalk, geography, known_answers, moe, output
+from lib import ROOT, census, crosswalk, geography, heatmap, known_answers, moe, output, points
 from lib import validate
 from lib.choropleth import draw
 from lib.compiled import code_hash, code_path, code_status, read_header
@@ -67,6 +69,33 @@ class Context:
             if t["annotation"].str.contains(f"{f} not published", regex=False).all():
                 raise Stop(f"{f} is not published at {unit} level")
         return t.drop(columns="GEOID").reset_index(drop=True)
+
+    def features(self, entry: dict) -> pd.DataFrame:
+        """Only the fields named in one `data` entry for a file Resource, read through a snapshot.
+        Geometry, if named, is in EPSG:3734 (architecture.md § 4.4)."""
+        res = self.specs[entry["resource"]]
+        fields = list(entry["fields"])
+        snap = geography.snapshot(res)
+        self.snaps.append(dataclasses.replace(snap, request=f"{snap.request} · {', '.join(fields)}"))
+        try:
+            return points.read(snap.path, fields)
+        except ValueError as e:
+            raise Stop(f"{res.id}: {e}")
+
+    def in_window(self, t: pd.DataFrame) -> pd.Series:
+        """True for rows in the Indicator's `window`, in local dates (architecture.md § 12)."""
+        try:
+            return points.in_window(t, self.spec.meta["window"])
+        except ValueError as e:
+            raise Stop(f"{self.spec.id}: {e}")
+
+    def inside(self, t: gpd.GeoDataFrame) -> pd.Series:
+        """True for points inside the Indicator's geography or on its boundary."""
+        return points.inside(t.geometry, self.geography(self.spec.meta["geography"]))
+
+    def stop(self, message: str):
+        """Stop the run from compiled code, e.g. for a value the spec doesn't cover."""
+        raise Stop(f"{self.spec.id}: {message}")
 
     def geography(self, geo_id: str):
         if geo_id not in self._geo:
@@ -128,9 +157,17 @@ def reported_at(ind: Spec, specs: dict[str, Spec]) -> list[str]:
     return [ind.meta["geography"]] + [specs[c].meta["to"] for c in ind.meta.get("crosswalks") or []]
 
 
+def indicator_outputs(ind: Spec, specs: dict[str, Spec]) -> dict:
+    """Output path at each geography: a table, or for a selection, a GeoPackage in build/points/."""
+    if ind.meta["measure"] == "points":
+        g = ind.meta["geography"]
+        return {g: output.POINTS / f"{ind.id}__{g}.gpkg"}
+    return {g: output.TABLES / f"{ind.id}__{g}.csv" for g in reported_at(ind, specs)}
+
+
 def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> None:
     bf = built_from(ind, specs)
-    outputs = {g: output.TABLES / f"{ind.id}__{g}.csv" for g in reported_at(ind, specs)}
+    outputs = indicator_outputs(ind, specs)
     reasons = {g: output.stale_reason(p, bf) for g, p in outputs.items()}
     if not force and not any(reasons.values()):
         print(f"{ind.id}: up to date")
@@ -139,6 +176,13 @@ def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> Non
 
     ctx = Context(ind, specs)
     module = _import(code_path(ind))
+    if ind.meta["measure"] == "points":
+        selected, excluded = selection(ind, module.compute(ctx))
+        path = outputs[ind.meta["geography"]]
+        output.write_points(selected, path, bf, _dedupe([s.record() for s in ctx.snaps]), excluded)
+        print(f"  {len(selected)} points; excluded: " + ", ".join(f"{k} {v}" for k, v in excluded.items()))
+        print(f"  wrote {path.relative_to(ROOT)}")
+        return
     tables = report(ind, specs, ctx, module.compute(ctx))
 
     results = {}
@@ -184,11 +228,24 @@ def report(ind: Spec, specs: dict[str, Spec], ctx: Context, native: pd.DataFrame
     return tables
 
 
+def selection(ind: Spec, result) -> tuple[gpd.GeoDataFrame, dict]:
+    """Check what a points Indicator's code returns: points in EPSG:3734, and rows excluded by reason."""
+    if not (isinstance(result, tuple) and len(result) == 2 and isinstance(result[0], gpd.GeoDataFrame)
+            and isinstance(result[1], dict)):
+        raise Stop(f"{ind.id}: code must return (points GeoDataFrame, excluded dict)")
+    selected, excluded = result
+    if selected.crs is None or selected.crs.to_epsg() != geography.AREA_CRS:
+        raise Stop(f"{ind.id}: points must be in EPSG:{geography.AREA_CRS}")
+    if selected.geometry.isna().any() or not (selected.geom_type == "Point").all():
+        raise Stop(f"{ind.id}: every row must have a point")
+    return selected, excluded
+
+
 def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) -> None:
     ind = specs[viz.meta["indicator"]]
     geo_id = viz.meta["geography"]
     run_indicator(ind, specs, force)
-    table_path = output.TABLES / f"{ind.id}__{geo_id}.csv"
+    table_path = indicator_outputs(ind, specs)[geo_id]
     ind_manifest = yaml.safe_load(output.manifest_path(table_path).read_text())
 
     bf = built_from(viz, specs)
@@ -201,26 +258,53 @@ def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) ->
     snaps: list[Snapshot] = []
     geo = geography.load(specs[geo_id], specs, snaps)
     data = _dedupe(ind_manifest["data"] + [s.record() for s in snaps])
-    breaks = draw(viz.meta, ind.meta["measure"], ind.meta.get("unit", "count"), output.read_table(table_path), geo,
-                  source_note(ind, specs, data), out)
+    note = source_note(ind, specs, data, viz)
+    if viz.meta.get("map") == "hexbin":
+        classes = heatmap.draw(viz.meta, output.read_points(table_path), geo, note, out)
+    else:
+        classes = {"breaks": draw(viz.meta, ind.meta["measure"], ind.meta.get("unit", "count"),
+                                  output.read_table(table_path), geo, note, out)}
     m = output.write_manifest(out, bf, data, ind_manifest["known_answer_tests"])
     m["indicator_output"] = {"path": ind_manifest["output"], "fingerprint": ind_manifest["fingerprint"]}
-    m["classes"] = {"classification": viz.meta["classification"], "breaks": breaks}
+    m["classes"] = {"classification": viz.meta["classification"], **classes}
     output.manifest_path(out).write_text(yaml.safe_dump(m, sort_keys=False, allow_unicode=True))
     print(f"  wrote {out.relative_to(ROOT)}")
 
 
-def source_note(ind: Spec, specs: dict[str, Spec], data: list[dict]) -> str:
-    parts = []
+def source_note(ind: Spec, specs: dict[str, Spec], data: list[dict], viz: Spec | None = None) -> str:
+    """Data sources from the Resource and Geography titles, the MOE sentence only when some data
+    is from the Census, then the Visualization's own `# Source note` text, if any."""
+    parts, census_data = [], False
     for entry in ind.meta.get("data") or []:
-        res = specs[entry["resource"]].meta
+        res = specs[entry["resource"]]
         fields = ", ".join(entry["fields"])
-        parts.append(f"{res['title']}, {entry['dataset']} {entry['vintage']}: {fields}")
+        if entry.get("dataset"):
+            parts.append(f"{res.meta['title']}, {entry['dataset']} {entry['vintage']}: {fields}")
+        else:
+            parts.append(f"{res.meta['title']}: {fields}")
+        census_data = census_data or validate._is_census(res)
     geos = [specs[d["source"]].meta["title"] for d in data
             if d["source"] in specs and specs[d["source"]].type == "Geography"]
     if geos:
         parts.append("Boundaries: " + "; ".join(dict.fromkeys(geos)))
-    return "Source: " + " · ".join(parts) + ". Margins of error at 90% confidence."
+    note = "Source: " + " · ".join(parts) + "."
+    if census_data:
+        note += " Margins of error at 90% confidence."
+    extra = _section(viz.body, "Source note") if viz else ""
+    if extra and extra != "None.":
+        note += " " + extra
+    return note
+
+
+def _section(body: str, heading: str) -> str:
+    """Text under a `# heading` in a spec body, up to the next `# ` heading, on one line."""
+    lines, inside = [], False
+    for line in body.splitlines():
+        if line.startswith("# "):
+            inside = line[2:].strip() == heading
+        elif inside:
+            lines.append(line.strip())
+    return " ".join(l for l in lines if l)
 
 
 def _fresh_against(out, ind_manifest) -> bool:
@@ -254,8 +338,8 @@ def status(specs: dict[str, Spec]) -> None:
             line += f" · code: {cs}"
         if s.type == "Indicator":
             bf = built_from(s, specs)
-            for g in reported_at(s, specs):
-                r = output.stale_reason(output.TABLES / f"{s.id}__{g}.csv", bf)
+            for g, path in indicator_outputs(s, specs).items():
+                r = output.stale_reason(path, bf)
                 line += f" · {g}: {r or 'up to date'}"
         if s.type == "Visualization":
             r = output.stale_reason(output.MAPS / f"{s.id}.html", built_from(s, specs))

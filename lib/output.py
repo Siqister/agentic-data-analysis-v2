@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import geopandas as gpd
 import pandas as pd
 import yaml
 
@@ -12,6 +13,7 @@ from lib.specs import file_hash, sha256
 
 TABLES = ROOT / "outputs" / "tables"
 MAPS = ROOT / "outputs" / "visualizations"
+POINTS = ROOT / "build" / "points"   # selections: intermediate, never published (§ 12)
 
 COLUMNS = ["geography_id", "geography_name", "estimate", "moe", "cv", "reliability"]
 RATE_COLUMNS = ["numerator", "numerator_moe", "denominator", "denominator_moe"]
@@ -52,6 +54,21 @@ def write_table(table: pd.DataFrame, path: Path, built_from, data, tests) -> dic
     path.parent.mkdir(parents=True, exist_ok=True)
     table[cols].to_csv(path, index=False)
     return write_manifest(path, built_from, data, tests)
+
+
+def write_points(points: gpd.GeoDataFrame, path: Path, built_from, data, excluded: dict) -> dict:
+    """A selection as a one-layer GeoPackage, with a manifest that adds `excluded` (reason → rows)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.unlink(missing_ok=True)
+    points.to_file(path, driver="GPKG", layer=path.stem)
+    manifest = write_manifest(path, built_from, data, {})
+    manifest["excluded"] = {str(k): int(v) for k, v in excluded.items()}
+    manifest_path(path).write_text(yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True))
+    return manifest
+
+
+def read_points(path: Path) -> gpd.GeoDataFrame:
+    return gpd.read_file(path)
 
 
 def read_table(path: Path) -> pd.DataFrame:
