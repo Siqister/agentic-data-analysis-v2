@@ -44,7 +44,7 @@ def _geojson(gdf: gpd.GeoDataFrame) -> dict:
     return json.loads(g.to_json(drop_id=True))
 
 
-def draw(spec_meta: dict, measure: str, table: pd.DataFrame, geo: gpd.GeoDataFrame,
+def draw(spec_meta: dict, measure: str, unit: str, table: pd.DataFrame, geo: gpd.GeoDataFrame,
          source_note: str, out: Path) -> list[float]:
     """Write the map. Returns the class breaks used."""
     t = table.drop(columns=["geography_name"], errors="ignore")
@@ -59,7 +59,7 @@ def draw(spec_meta: dict, measure: str, table: pd.DataFrame, geo: gpd.GeoDataFra
         "colors": spec_meta["colors"],
         "classes": spec_meta["classes"],
         "breaks": b,
-        "percent": measure == "percent",
+        "format": "percent" if measure == "percent" else unit,
         "noValue": NO_VALUE,
     }
     page = TEMPLATE.format(
@@ -107,7 +107,8 @@ const data = {data};
 const scheme = d3["scheme" + config.colors];
 if (!scheme || !scheme[config.classes]) throw new Error("unknown color scheme " + config.colors);
 const color = d3.scaleThreshold().domain(config.breaks).range(scheme[config.classes]);
-const fmt = config.percent ? (v => d3.format(".1f")(v) + "%") : d3.format(",.0f");
+const fmt = config.format === "percent" ? (v => d3.format(".1f")(v) + "%")
+  : config.format === "dollars" ? d3.format("$,.0f") : d3.format(",.0f");
 const fill = v => v == null ? config.noValue : color(v);
 
 const svg = d3.select("#map");

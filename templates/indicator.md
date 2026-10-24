@@ -10,6 +10,7 @@ status: draft                                # draft | stable (only the expert s
 tags: [housing]                              # (optional)
 
 measure: percent                             # percent | rate | count | median | index
+unit: count                                  # (optional) count (default) | dollars; for display only
 geography: bg_2020                           # calculated (and reported) here
 crosswalks:                                  # (optional) also reported at each crosswalk's target
   - bg_2020__to__tract_2020
@@ -34,6 +35,9 @@ reliability:                                 # (optional) survey data only
   cv_threshold: 0.30                         # CV above this = low reliability
   low: flag                                  # flag (keep and mark) | suppress (leave blank)
 ---
+
+<!-- The body is about the measure, not the place: no place names, unit types, or Geography or
+     Crosswalk IDs. Fetching, joining, crosswalks and reliability are done by lib/. -->
 
 # Definition
 

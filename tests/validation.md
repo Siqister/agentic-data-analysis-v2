@@ -19,7 +19,7 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] Has frontmatter with `type` set to `Resource`, `Geography`, `Crosswalk`, `Indicator`, or `Visualization`, and sits in that type's folder.
 - [ ] File name is unique across `specs/`.
 - [ ] Has every field its template requires: `title`, a one-line `description`, `status`, plus the type's own fields. Fields marked *(optional)* may be missing.
-- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `within_rule`, `classification`, `reliability.low`.
+- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `unit`, `within_rule`, `census_unit`, `classification`, `reliability.low`.
 - [ ] Contains no API key values. Only `.env` variable names are allowed.
 
 ### How specs fit together
@@ -30,6 +30,7 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] **Crosswalk:** `population_weighted` has `weights` and `weights_source`; other methods have neither.
 - [ ] **Crosswalk:** `nested` with a `from` Geography that has `within` requires that `within` equals `to`. (Other `nested` crosswalks are checked when they're built: every unit must fall in exactly one target.)
 - [ ] **Indicator:** every listed crosswalk's `from` equals the Indicator's `geography`.
+- [ ] **Indicator:** with Census data, its `geography` has a `census_unit`.
 - [ ] **Indicator:** every `data` entry uses a dataset and vintage on its Resource's approved `datasets` list.
 - [ ] **Indicator:** a `median` or `index` measure that has crosswalks has an `# Aggregation` section.
 - [ ] **Visualization:** `geography` is the Indicator's geography or the target of one of its crosswalks. With `manual` classification, `breaks` has `classes − 1` values in increasing order.
@@ -38,6 +39,7 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 ### Data fields (author mode; needs network access)
 
 - [ ] Every field code in an Indicator's `data` exists in the source's own field list for that dataset and vintage (for Census, `variables.json`). Its official label is shown next to the spec's plain meaning so the expert can confirm they match.
+- [ ] Every field is published at the Indicator's geography's `census_unit`: a sample request (one tract's units) doesn't return `null` for every unit.
 
 ### Code and status
 
