@@ -67,7 +67,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Staleness detection (code vs. results) (chunk 1)
 - ☑ Known-answer tests (chunk 1)
 - ☑ Run mode (chunk 1)
-- ◐ Invocation tests (chunk 1: `inv_001` ran through the runner only; `inv_001` and `inv_002` still need a fresh-session run from the plain prompt)
+- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24)
 
 **Resources & geographies**
 - ☑ API resource (Census Data API) (chunk 1)
@@ -97,9 +97,95 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 ## Current chunk
 
-_None. The next chunk is defined in chat with the expert (step 1 of the working method)._
+### Chunk 2 — Block group median household income
 
-**Carried over from chunk 1:** run `inv_001` and `inv_002` from the plain prompt in a fresh session.
+**Analysis question:** What is the block group level income?
+
+**Brief:** One published median, reported only at its native geography (block groups). Like chunk 1, the value comes straight from a Census table with no derivation, so this chunk adds no new capability from the checklist. "Median or other custom aggregation" stays ☐ until a chunk aggregates a median to another geography: a citywide median, which would need interpolation from the B19001 income brackets and a derived MOE, is deferred to a later chunk.
+
+**Branch:** `chunk/02-bg-median-income`
+
+**Status:** ✅ Stop A passed 2026-10-24: requirements approved by the expert, including the proposed fixes for design issues 1–4. Next: task 1, in Claude Code.
+
+**Exercises (capability checklist):** no new item; it reuses API resource, `within`, reliability flag and choropleth. New smaller cases, below the level of the checklist: `measure: median` with no crosswalks, blank values that are expected rather than errors, table-specific top- and bottom-coded values, and a dollar format on the map.
+
+**Carried over from chunk 1:** run `inv_001` and `inv_002` from the plain prompt in a fresh session. Do this **before** design issue 1 changes `inv_001`, so the result is recorded against the chunk 1 version.
+
+**Task 1 results (2026-10-24, fresh sessions, run by the expert; working tree checked afterwards: no files created or changed):**
+
+- `inv_001` ("Show me median household income by block group."): ✅ **pass.** The agent said there's no spec for median household income, listed the available Indicators and Visualizations, and created nothing.
+- `inv_002` ("Map the population count by block group in Cleveland."): ✅ **pass.** It went through `lib.runner`, which reported both specs up to date, so nothing was rebuilt.
+
+#### Requirements
+
+**Specs to draft** (all `status: draft`)
+
+| ID | Type | Settings |
+|---|---|---|
+| `median_household_income` | Indicator | `measure: median`; `geography: bg_2020`; no `crosswalks`; `data`: `census_api`, `acs/acs5` 2024, `B19013_001E` (Median household income in the past 12 months, in 2024 inflation-adjusted dollars; `_M` pulled automatically); `reliability: {cv_threshold: 0.30, low: flag}`; `unit: dollars` (design issue 4) |
+| `map_median_household_income__bg_2020` | Visualization | `indicator: median_household_income`; `geography: bg_2020`; `classification: quantile`; `classes: 5`; `colors: Greens`; tooltip shows the standard fields only (name, estimate, MOE, reliability), in dollars |
+
+Used unchanged: `census_api`, `cle_city`, `bg_2020`. This chunk doesn't use `bg_2020__to__cle_city`.
+
+**Computation** (to be written into the Indicator body)
+
+1. Pull `B19013_001E` and `B19013_001M` for every block group in Cuyahoga County (state `39`, county `035`).
+2. Keep the block groups in `bg_2020`. Every `bg_2020` unit must have a **row**. A missing row is an error. A blank **value** with a note is allowed (design issue 3).
+3. **Annotations**: same rule as `population_count`. If the estimate or the MOE is an annotation, the value is blank and the annotation goes in `note`. Medians are often `-666666666` (too few sample cases) at block group level.
+4. **Top- and bottom-coded values**: an estimate of `250001` ("$250,000 or more") or `2499` ("under $2,500") is a placeholder, not a measured value. The value is blank, and `note` reads "top-coded: $250,000 or more" or "bottom-coded: under $2,500" (design issue 2).
+5. `estimate` = B19013_001E, `moe` = B19013_001M.
+6. **Reliability**: CV = (MOE ÷ 1.645) ÷ estimate. `low` if CV > 0.30, otherwise `ok`. Low values are flagged and kept.
+
+**Caveats** (to be written into the Indicator body): values are in 2024 inflation-adjusted dollars. A median can't be summed or averaged across block groups, so there's no citywide value in this chunk. Blank block groups appear gray on the map.
+
+**Outputs** (each with its manifest)
+
+- `outputs/tables/median_household_income__bg_2020.csv`
+- `outputs/visualizations/map_median_household_income__bg_2020.html`
+
+No city table.
+
+**Tests**
+
+- **Spec validation** passes for the whole project.
+- **`kat_002`: Median household income, one block group.** Compares one `bg_2020` value with its published ACS 2020–2024 5-year `B19013_001` value on data.census.gov. Tolerance: `exact`, because the value comes from the same source with no computation. This tests fetching, the GEOID join, and the output, not the method. The agent proposes a block group with a non-blank, non-coded value and a link, and the expert confirms it.
+- **`inv_001`**: new prompt (design issue 1).
+- **`inv_003`: Plain-language income map.** Prompt: "Map median household income by block group in Cleveland." Expected: `runs`, `spec: map_median_household_income__bg_2020`.
+
+**Not in this chunk:** a citywide median, B19001 income brackets, per capita or mean income, poverty (`C17002`), tracts, neighborhoods.
+
+#### Design issues
+
+1. **`inv_001` stops being an unknown indicator.** Its prompt is "Show me median household income by block group," which this chunk makes available. Proposed new prompt: "Show me median gross rent by block group." Keep the test's ID and intent.
+2. **Top and bottom coding aren't annotations.** `lib/census.py` treats only negative codes as annotations, so `250001` and `2499` would pass through as real values. The placeholder values are specific to each table (other medians use other caps), so they don't belong in `lib/`. Proposed: add a `B19013` note under `census_api` `# Notes` (§ 4.1, table-specific notes), and blank these values in the Indicator's compiled code, as in Computation step 4. No `lib/` change. Editing `census_api` sets it back to `draft` (rule 7).
+3. **Expected blanks.** `population_count` treats a missing value as an error. For medians, blanks are normal. Proposed: § 12 *Output tables* says "a missing unit (row) is an error; a blank value with its reason in `note` is allowed." Confirm that no `lib/` check treats blank values as an error. (`output.py` already keeps blanks blank.)
+4. **Dollar format.** `choropleth.py` formats values as either counts (`,.0f`) or percents. Proposed: add an optional `unit` field to Indicator (`count` by default, or `dollars`; percent still comes from `measure`). Update § 4.4, the Indicator template, the validator, and the tooltip and legend formats (`$,.0f`). This is a `lib/` change, so it needs review, and every result reruns.
+
+Not issues (checked in the code): the validator requires `# Aggregation` only for a median *with* crosswalks; the runner handles an Indicator with no `crosswalks`; `exact` tolerance already exists in `known_answers.py`.
+
+Proposed: apply 1–4 before drafting specs.
+
+#### Tasks
+
+1. Run the carried-over invocation tests (`inv_001`, `inv_002`) from the plain prompt in a fresh session, and record the results.
+2. Create `chunk/02-bg-median-income` from `main`.
+3. Apply design issues 1–4.
+4. Check `B19013_001E` against `variables.json` for `acs/acs5` 2024. Confirm that B19013 is published at block group level, and record the top- and bottom-code values it uses.
+5. Draft the two specs, update each folder's `index.md`, add `kat_002` (with a proposed block group) and `inv_003`, and update `inv_001`. 🛑 **Stop B.**
+6. Extend `lib/` for `unit: dollars`. Compile `pipeline/indicators/median_household_income.py`.
+7. Run validation, `kat_001`, `kat_002` and the invocation tests, then produce the outputs. 🛑 **Stop C.**
+8. Retro per the working method.
+
+#### Decisions (2026-10-24)
+
+- **Indicator:** median household income, `B19013_001E`, ACS 2020–2024 5-year.
+- **Geography:** block group only. The citywide median is deferred.
+- **Top- and bottom-coded values:** blank, with a note.
+- **Reliability:** CV 0.30, flag.
+- **Map:** quantile, 5 classes, `Greens`.
+- **Visualization reuse:** keep one Visualization spec per map, even though this map's settings nearly match chunk 1's. Shared defaults are recorded as future scope in [architecture.md § 13](architecture.md#13-deferred) (*Shared Visualization defaults*), with the triggers for revisiting them.
+
+**Other income variables considered (for later chunks):** B19001 households by income bracket (16 brackets, `percent`, aggregates to the city through `nested`, and is the basis for a citywide median); B19301 per capita income, or B19313 aggregate income ÷ B01003 population (a ratio that could build on `population_count`); B19025 aggregate household income ÷ households (mean household income); C17002 ratio of income to poverty level (the block-group-level poverty table, because B17001 isn't published for block groups).
 
 ---
 
@@ -150,5 +236,9 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-21 | Claude Code | ✅ Stop B passed: expert approved specs and tests. | Tasks 6–8. |
 | 2026-10-21 | Claude Code | Tasks 6–8: built `lib/`, compiled `population_count`, ran validation, `kat_001` (pass, +0.07%), `inv_001` (pass), produced 2 tables + 1 map with manifests. | 🛑 Stop C: expert reviews outputs, tests and code; adds `verified`. Then task 9 (retro). |
 | 2026-10-21 | Claude Code | Outputs had been deleted from the working tree; regenerated `map_population_count__bg_2020` (and its `population_count` tables) via `lib.runner run --mode author`. `kat_001` pass; outputs match the Stop C commit (same fingerprints, only `created` changed). | 🛑 Still at Stop C. |
+| 2026-10-21 | Claude Code | Request "map poverty rates by block group": no matching spec; reported unavailable and listed existing specs. Nothing created. | Expert: this was a test of unknown-indicator handling; no chunk planned. |
 | 2026-10-21 | Chat | ✅ Stop C passed. Expert tested prompt invocation: a plain prompt bypassed the runner. Findings added to the retro notes (prompt routing, `inv_002`, `inv_001` scope, edits to stable specs, review load). | Task 9 (retro) in Claude Code. Expert adds `verified` line and sets specs `stable`. |
 | 2026-10-21 | Claude Code | Task 9 (retro). The expert decided: an agent edit to a `stable` spec → `draft`; hash `lib/` into manifests; keep `kat_001` at relative 2%; the agent sets `verified` and `stable` on the expert's behalf. Applied design changes, updated the checklist, ran validation (clean) and run mode (pass), merged `chunk/01-bg-population` into `main`. | Define chunk 2 in chat. First run `inv_001` and `inv_002` from the plain prompt in a fresh session. |
+| 2026-10-24 | Chat | Defined chunk 2 (block group median household income): requirements, design issues 1–4, tasks. Expert chose B19013, block group only, top/bottom-coded values blank, quantile 5 `Greens`. Couldn't reach the Census API from the session, so the field check moved to task 4. | 🛑 Stop A: expert approves requirements. Then task 1 in Claude Code. |
+| 2026-10-24 | Chat | Corrected the brief: B19013 is a published value, so chunk 2 adds no new capability from the checklist. Discussed Visualization reuse: one spec per map stays the rule, and shared defaults were added to architecture.md § 13 as deferred. ✅ Stop A passed. | Claude Code: start at task 1 (carried-over invocation tests), then task 2 (create the branch). Stop B after specs are drafted. |
+| 2026-10-24 | Claude Code | Task 1: expert ran `inv_001` and `inv_002` in fresh sessions. Both passed. No files created. | Task 2: create the branch. |
