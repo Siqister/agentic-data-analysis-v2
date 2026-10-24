@@ -24,10 +24,18 @@ def read(snap: Snapshot, fields: list[str]) -> pd.DataFrame:
     for f in fields:
         values = pd.to_numeric(df[f], errors="raise").astype(float)
         is_annotation = values.isin(ANNOTATIONS)
-        notes[is_annotation] += f"{f}={values[is_annotation].astype(int).astype(str)}; "
+        notes[is_annotation] += f + "=" + values[is_annotation].astype(int).astype(str) + "; "
         df[f] = values.mask(is_annotation, np.nan)
     df["annotation"] = notes.str.rstrip("; ")
     return df[["GEOID", *fields, "annotation"]]
+
+
+def estimate_moe(table: pd.DataFrame, field: str) -> tuple[pd.Series, pd.Series]:
+    """Estimate and MOE for one _E field, after `read`. An annotated estimate blanks both;
+    an annotated MOE alone blanks only the MOE. `annotation` already names what was annotated."""
+    est = table[field]
+    moe = table[field[:-1] + "M"].where(est.notna())
+    return est, moe
 
 
 def with_moe(fields: list[str]) -> list[str]:

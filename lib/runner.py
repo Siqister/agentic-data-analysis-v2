@@ -156,7 +156,7 @@ def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) ->
     snaps: list[Snapshot] = []
     geo = geography.load(specs[geo_id], specs, snaps)
     data = _dedupe(ind_manifest["data"] + [s.record() for s in snaps])
-    breaks = draw(viz.meta, ind.meta["measure"], output.read_table(table_path), geo,
+    breaks = draw(viz.meta, ind.meta["measure"], ind.meta.get("unit", "count"), output.read_table(table_path), geo,
                   source_note(ind, specs, data), out)
     m = output.write_manifest(out, bf, data, ind_manifest["known_answer_tests"])
     m["indicator_output"] = {"path": ind_manifest["output"], "fingerprint": ind_manifest["fingerprint"]}

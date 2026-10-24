@@ -30,6 +30,7 @@ CHOICES = {
     "method": {"population_weighted", "areal", "centroid", "nested"},
     "weights": {"total_population", "households", "housing_units"},
     "measure": {"percent", "rate", "count", "median", "index"},
+    "unit": {"count", "dollars"},
     "within_rule": {"majority_area", "centroid", "any"},
     "classification": {"quantile", "equal_interval", "natural_breaks", "manual"},
 }

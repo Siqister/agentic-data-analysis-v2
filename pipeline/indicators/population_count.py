@@ -1,14 +1,13 @@
 # spec: specs/indicators/population_count.md
-# spec_hash: sha256:dfca17a449b8099123f3060bf23da2420c2bf7daea133db620245c4f5533e139
-# generated: { by: claude-code, at: 2026-10-21T17:08:51-04:00 }
-# verified: { by: human:siqi, at: 2026-10-21T17:51:45-04:00 }
+# spec_hash: sha256:ee3af3b03a19a5e3bc41dc989811e13713995f6b14bae28279732f5b8c3361b0
+# generated: { by: claude-code, at: 2026-10-24T14:56:45-04:00 }
 """Total population (B01003_001), by block group and for the city. Steps follow the spec's # Computation."""
 
 import pandas as pd
 
-from lib import crosswalk, moe
+from lib import census, crosswalk, moe
 
-E, M = "B01003_001E", "B01003_001M"
+E = "B01003_001E"
 
 
 def compute(ctx) -> dict[str, pd.DataFrame]:
@@ -24,15 +23,16 @@ def compute(ctx) -> dict[str, pd.DataFrame]:
     if len(missing):
         raise ValueError(f"no ACS row for block groups: {', '.join(missing)}")
 
-    # 3–4. Estimate and MOE; annotation values are already blank, named in `note`.
+    # 3–4. Estimate and MOE: an annotated estimate blanks both, an annotated MOE only the MOE.
+    est, err = census.estimate_moe(t, E)
     t = pd.DataFrame({"geography_id": t["geography_id"], "geography_name": t["geography_name"],
-                      "estimate": t[E], "moe": t[M], "note": t["annotation"]})
+                      "estimate": est, "moe": err, "note": t["annotation"]})
 
-    # 5. City: sum of block group estimates, MOE = √(sum of squared MOEs).
-    city = crosswalk.apply_count(t, ctx.crosswalk("bg_2020__to__cle_city"))
+    # 5. City: sums over the block groups that have a value; the note says how many were left out.
+    city = crosswalk.apply_count(t, ctx.crosswalk("bg_2020__to__cle_city"), label="block group")
     city = city.merge(ctx.geography("cle_city")[["geography_id", "geography_name"]], on="geography_id")
 
-    # 6–7. Reliability at every geography.
+    # 6–8. Reliability at every geography.
     return {
         "bg_2020": moe.reliability(t, rel["cv_threshold"], rel["low"]),
         "cle_city": moe.reliability(city, rel["cv_threshold"], rel["low"]),

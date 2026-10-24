@@ -105,7 +105,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/02-bg-median-income`
 
-**Status:** 🛑 **At Stop B** (2026-10-24). Tasks 1–5 done: invocation tests passed, branch created, design issues 1–4 applied (`lib/` part of issue 4 waits for task 6), B19013 checked, specs and tests drafted. Waiting for the expert to answer the [Stop B questions](#stop-b-questions-chunk-2) and approve the specs. No code has been generated.
+**Status:** 🛑 **At Stop C** (2026-10-24). Tasks 6–7 done; see [Stop C review](#stop-c-review-chunk-2). Waiting for the expert to run `inv_001`–`inv_003` in fresh sessions and review outputs, tests and code. Then task 8 (retro).
 
 **Exercises (capability checklist):** no new item; it reuses API resource, `within`, reliability flag and choropleth. New smaller cases, below the level of the checklist: `measure: median` with no crosswalks, blank values that are expected rather than errors, table-specific top- and bottom-coded values, and a dollar format on the map.
 
@@ -181,6 +181,26 @@ Applied 1–4 on 2026-10-24: `inv_001` prompt → "Show me median gross rent by 
 - **City total with blank parts → option B.** The sums use the block groups that have a value, and `note` says how many were left out. Written into `population_count` step 5. Needs a `lib/` change in task 6: `crosswalk.apply_count` currently stops on any blank.
 - **General principle (expert):** compute with flagged uncertainty rather than stop. Stop only for structural problems. Added to architecture.md § 12 *Output tables*.
 - **Consistency:** `median_household_income` step 3 now uses the same annotation rule as `population_count` (an annotated estimate blanks both; an annotated MOE alone blanks only `moe`). Step 4 (coded values) overrides it. Step 6 matches `population_count` step 8.
+
+#### Stop C review (chunk 2)
+
+**Results**
+
+- `median_household_income__bg_2020`: 429 rows. **335** have a value ($6,130–$158,438). **94** are blank: 90 with `B19013_001E=-666666666; B19013_001M=-222222222` and 4 `bottom-coded: under $2,500`. Reliability: 198 `ok`, 137 `low` (CV max 0.60), 94 blank. Every blank value has blank `moe`, `cv` and `reliability`.
+- Map: quantile breaks $27,071 / $38,494 / $47,276 / $59,577 (from the 335 values); legend and tooltip in dollars; blanks gray.
+- `kat_002`: **pass** (42,344 = 42,344, exact). `kat_001`: **pass** (366,340, +0.07%), unchanged.
+- `population_count` (recompiled): same values as chunk 1 (429 block groups, city 366,340 ± 7,663, 292 `ok` / 137 `low`). No block group has a blank estimate or MOE, so the new partial-sum note doesn't appear.
+- Spec validation: 0 errors. Warnings are only "draft / unreviewed" (expected). Field check: B19013_001E label matches.
+- A `lib/` change made every result rerun on its own (`lib_hash`, from the chunk 1 retro), with no `--force`.
+- No API key in `data/`, `outputs/`, `build/`, code, or specs.
+
+**Invocation tests (expert, fresh sessions, plain prompts):** `inv_001` (median gross rent → not available, list), `inv_002` (population map → runs), `inv_003` (income map → runs). Not run yet.
+
+**To review**
+
+- `lib/` changes: `census.py` (new `estimate_moe` helper; **bug fix** in `read`: the annotation note was filled with a printed copy of a whole pandas column, an f-string bug latent since chunk 1 that B19013 exposed); `crosswalk.py` (`apply_count` sums the values it has and notes what's missing, with a `label` for the unit name, instead of stopping); `choropleth.py` + `runner.py` (`unit: dollars` → `$,.0f`); `validate.py` (`unit` choices).
+- `pipeline/indicators/population_count.py` (recompiled: uses `estimate_moe`, city note label) and `pipeline/indicators/median_household_income.py` (new). Each needs a `verified` line.
+- Specs to set `stable`: `population_count`, `median_household_income`, `map_median_household_income__bg_2020`.
 
 #### Tasks
 
@@ -262,3 +282,5 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Tasks 2–5: branch `chunk/02-bg-median-income`; design issues 1–4 applied (docs, template, `census_api` note); B19013 checked (335 values, 90 annotated, 4 bottom-coded); drafted `median_household_income`, `map_median_household_income__bg_2020`, `kat_002`, `inv_003`; updated `inv_001`. Found a spec/code mismatch in `population_count` (annotation rule). | 🛑 Stop B: expert answers the 4 questions and approves the specs. Then task 6. |
 | 2026-10-24 | Claude Code | Expert answered the Stop B questions: `kat_002` confirmed, `census_api` re-approved, annotation wording OK, estimate kept when only the MOE is annotated. Edited `population_count` to match (now `draft`, code stale). | 🛑 Stop B: expert decides on the follow-ups (city total with a blank MOE; median rule) and approves the specs. |
 | 2026-10-24 | Claude Code | Follow-ups: city total uses available parts with a note (option B); principle "compute with flagged uncertainty rather than stop" added to § 12; median annotation rule aligned with `population_count`. | 🛑 Stop B: expert approves the specs. Then task 6. |
+| 2026-10-24 | Claude Code | ✅ Stop B passed: expert approved both new specs, the edited `population_count`, `kat_002`, `inv_001`, `inv_003`. | Tasks 6–7. |
+| 2026-10-24 | Claude Code | Tasks 6–7: `lib/` extended (`unit: dollars`, partial sums, `estimate_moe`), fixed a latent annotation-note bug in `census.read`, recompiled `population_count`, compiled `median_household_income`, produced outputs. `kat_001` and `kat_002` pass. | 🛑 Stop C: expert runs `inv_001`–`inv_003` in fresh sessions and reviews. Then task 8 (retro). |
