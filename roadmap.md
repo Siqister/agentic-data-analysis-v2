@@ -105,7 +105,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/02-bg-median-income`
 
-**Status:** ✅ Stop A passed 2026-10-24: requirements approved by the expert, including the proposed fixes for design issues 1–4. Next: task 1, in Claude Code.
+**Status:** 🛑 **At Stop B** (2026-10-24). Tasks 1–5 done: invocation tests passed, branch created, design issues 1–4 applied (`lib/` part of issue 4 waits for task 6), B19013 checked, specs and tests drafted. Waiting for the expert to answer the [Stop B questions](#stop-b-questions-chunk-2) and approve the specs. No code has been generated.
 
 **Exercises (capability checklist):** no new item; it reuses API resource, `within`, reliability flag and choropleth. New smaller cases, below the level of the checklist: `measure: median` with no crosswalks, blank values that are expected rather than errors, table-specific top- and bottom-coded values, and a dollar format on the map.
 
@@ -164,6 +164,17 @@ No city table.
 Not issues (checked in the code): the validator requires `# Aggregation` only for a median *with* crosswalks; the runner handles an Indicator with no `crosswalks`; `exact` tolerance already exists in `known_answers.py`.
 
 Proposed: apply 1–4 before drafting specs.
+
+Applied 1–4 on 2026-10-24: `inv_001` prompt → "Show me median gross rent by block group."; `census_api` `# Notes` B19013 (now `draft` again, per rule 7); architecture.md § 12 *Output tables* (a missing unit is an error, a blank value isn't, and its `reliability` is blank); `unit` field in § 4 and § 4.4, the Indicator template, and validation.md's list of fields with fixed choices. Issue 3 check: no `lib/` check treats a blank value as an error (`moe.reliability` leaves `reliability` blank, `choropleth` draws gray and leaves blanks out of the breaks, `output` keeps blanks blank; `crosswalk.apply_count` stops on blanks, but only for counts moved through a crosswalk).
+
+**Task 4 findings (2026-10-24):** `B19013_001E` = "Median household income in the past 12 months (in 2024 inflation-adjusted dollars)", `_M` listed. Published at block group level: all 429 `bg_2020` units have a row. Codes, per the Census Bureau's annotation notes: `2499` = "2,500-" and `250001` = "250,000+", each with MOE `-333333333` ("median falls in the lowest or highest interval of an open-ended distribution"). In Cleveland: 90 block groups have estimate `-666666666` (MOE `-222222222`), 4 are bottom-coded, 0 are top-coded (9 elsewhere in the county). That leaves **335** block groups with a value and **94** blank.
+
+#### Stop B questions (chunk 2)
+
+1. **`kat_002`:** the agent proposes block group `390351198002` (Block Group 2, Tract 1198): **$42,344 ± $13,701**, near the middle of Cleveland's values, published and uncoded. Confirm on <https://data.census.gov/table/ACSDT5Y2024.B19013?g=1500000US390351198002>.
+2. **`census_api` re-approval:** it went back to `draft` when the B19013 note was added. Until you approve it again, chunk 1's outputs can't run in run mode.
+3. **Annotation rule wording** (Computation steps 3–4): drafted so that if the estimate *or* the MOE is an annotation, **both** `estimate` and `moe` are blank. Coded values (whose MOE is `-333333333`) get only the coded note ("bottom-coded: under $2,500"), not the annotation code. OK?
+4. **A mismatch found in chunk 1's reviewed code:** `population_count`'s spec (step 3) says a block group whose estimate *or* MOE is an annotation gets a blank value. Its code blanks only the field that holds the annotation, so an annotated MOE would leave the estimate in place. This has no effect on current data (no B01003 block group has an annotation). Proposed: add one shared helper in `lib/census.py` (estimate + MOE + note, with the both-blank rule), use it in both Indicators, and recompile `population_count` for your review. Its results would rerun with the same values. Or leave `population_count` alone and note it.
 
 #### Tasks
 
@@ -242,3 +253,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Chat | Defined chunk 2 (block group median household income): requirements, design issues 1–4, tasks. Expert chose B19013, block group only, top/bottom-coded values blank, quantile 5 `Greens`. Couldn't reach the Census API from the session, so the field check moved to task 4. | 🛑 Stop A: expert approves requirements. Then task 1 in Claude Code. |
 | 2026-10-24 | Chat | Corrected the brief: B19013 is a published value, so chunk 2 adds no new capability from the checklist. Discussed Visualization reuse: one spec per map stays the rule, and shared defaults were added to architecture.md § 13 as deferred. ✅ Stop A passed. | Claude Code: start at task 1 (carried-over invocation tests), then task 2 (create the branch). Stop B after specs are drafted. |
 | 2026-10-24 | Claude Code | Task 1: expert ran `inv_001` and `inv_002` in fresh sessions. Both passed. No files created. | Task 2: create the branch. |
+| 2026-10-24 | Claude Code | Tasks 2–5: branch `chunk/02-bg-median-income`; design issues 1–4 applied (docs, template, `census_api` note); B19013 checked (335 values, 90 annotated, 4 bottom-coded); drafted `median_household_income`, `map_median_household_income__bg_2020`, `kat_002`, `inv_003`; updated `inv_001`. Found a spec/code mismatch in `population_count` (annotation rule). | 🛑 Stop B: expert answers the 4 questions and approves the specs. Then task 6. |

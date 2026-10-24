@@ -122,7 +122,7 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 | **Resource** | One API, file, or dataset | `specs/resources/` | `resource`, `auth`, `datasets` |
 | **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule` |
 | **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source` |
-| **Indicator** | One measure | `specs/indicators/` | `measure`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability` |
+| **Indicator** | One measure | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability` |
 | **Visualization** | One map | `specs/visualizations/` | `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show` |
 
 ### 4.1 Resource: the unit of access
@@ -184,6 +184,7 @@ One measure, such as "% of households with housing cost burden."
 - **`measure`** decides how values move to other geographies:
   - `percent`, `rate`, `count`: move the counts, then compute ([§ 12](#12-conventions)).
   - `median`, `index`: with crosswalks, the body needs an `# Aggregation` section explaining a valid method.
+- **`unit`** (optional): what the values are in, for display. `count` (the default) or `dollars`. Percentages come from `measure: percent`, not `unit`.
 - **`reliability`** (survey data only) sets the CV threshold, and whether low-reliability values are flagged or suppressed.
 - **Body:** `# Definition` (universe, numerator, denominator, exclusions), `# Computation` (steps), `# Caveats`. Add `# Point rules` for point data: outside-city points, boundary points, accepted geocodes, and denominator.
 
@@ -438,8 +439,9 @@ cleveland-analysis/
 | `numerator`, `numerator_moe`, `denominator`, `denominator_moe` | For percentages and rates |
 | `note` | Anything unusual, e.g. "suppressed: low reliability" |
 
-- Values are stored at full precision and rounded only for display (percentages to 1 decimal place in tooltips).
+- Values are stored at full precision and rounded only for display: percentages to 1 decimal place, counts and dollars to whole numbers (dollars with a `$`).
 - **Missing or suppressed values are left blank, never 0**, with the reason in `note`.
+- **A missing unit is an error; a blank value is not.** Every unit of the geography gets a row. A unit with no row in the source stops the run. A unit whose value is blank (an annotation, a coded value, suppression), with its reason in `note`, is a normal result, and its `reliability` is blank.
 
 ### Maps
 

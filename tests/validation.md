@@ -19,7 +19,7 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] Has frontmatter with `type` set to `Resource`, `Geography`, `Crosswalk`, `Indicator`, or `Visualization`, and sits in that type's folder.
 - [ ] File name is unique across `specs/`.
 - [ ] Has every field its template requires: `title`, a one-line `description`, `status`, plus the type's own fields. Fields marked *(optional)* may be missing.
-- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `within_rule`, `classification`, `reliability.low`.
+- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `unit`, `within_rule`, `classification`, `reliability.low`.
 - [ ] Contains no API key values. Only `.env` variable names are allowed.
 
 ### How specs fit together
