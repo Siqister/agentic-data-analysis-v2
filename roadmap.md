@@ -67,7 +67,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Staleness detection (code vs. results) (chunk 1)
 - ☑ Known-answer tests (chunk 1)
 - ☑ Run mode (chunk 1)
-- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24)
+- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24; `inv_001`–`inv_003` passed after approval in chunk 2)
 
 **Resources & geographies**
 - ☑ API resource (Census Data API) (chunk 1)
@@ -76,6 +76,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Geography from Census boundary files (chunk 1: cartographic boundary file, fetched by URL)
 - ☑ Geography from a local file (chunk 1: city GeoPackage; neighborhoods not yet)
 - ☑ Geography selection rule (`within`, `majority_area`) (chunk 1)
+- ☑ Census request extent derived from the Geography (`census_unit`) (chunk 2)
 
 **Indicators**
 - ☑ Count, with margin of error (chunk 1)
@@ -97,154 +98,28 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 ## Current chunk
 
-### Chunk 2 — Block group median household income
-
-**Analysis question:** What is the block group level income?
-
-**Brief:** One published median, reported only at its native geography (block groups). Like chunk 1, the value comes straight from a Census table with no derivation, so this chunk adds no new capability from the checklist. "Median or other custom aggregation" stays ☐ until a chunk aggregates a median to another geography: a citywide median, which would need interpolation from the B19001 income brackets and a derived MOE, is deferred to a later chunk.
-
-**Branch:** `chunk/02-bg-median-income`
-
-**Status:** 🛑 **At Stop C** (2026-10-24). Tasks 6–7 done, then design issue 5 (separation of concerns) applied after the expert's review; see [Stop C review](#stop-c-review-chunk-2). ✅ Expert approved all changes (2026-10-24): six specs `stable`, both code files `verified` (set by the agent on the expert's instruction). Validation 0 errors, 0 warnings. Next: the expert reruns `inv_002` and `inv_003` in fresh sessions, now that run mode can run. Then task 8 (retro).
-
-**Exercises (capability checklist):** no new item; it reuses API resource, `within`, reliability flag and choropleth. New smaller cases, below the level of the checklist: `measure: median` with no crosswalks, blank values that are expected rather than errors, table-specific top- and bottom-coded values, and a dollar format on the map.
-
-**Carried over from chunk 1:** run `inv_001` and `inv_002` from the plain prompt in a fresh session. Do this **before** design issue 1 changes `inv_001`, so the result is recorded against the chunk 1 version.
-
-**Task 1 results (2026-10-24, fresh sessions, run by the expert; working tree checked afterwards: no files created or changed):**
-
-- `inv_001` ("Show me median household income by block group."): ✅ **pass.** The agent said there's no spec for median household income, listed the available Indicators and Visualizations, and created nothing.
-- `inv_002` ("Map the population count by block group in Cleveland."): ✅ **pass.** It went through `lib.runner`, which reported both specs up to date, so nothing was rebuilt.
-
-#### Requirements
-
-**Specs to draft** (all `status: draft`)
-
-| ID | Type | Settings |
-|---|---|---|
-| `median_household_income` | Indicator | `measure: median`; `geography: bg_2020`; no `crosswalks`; `data`: `census_api`, `acs/acs5` 2024, `B19013_001E` (Median household income in the past 12 months, in 2024 inflation-adjusted dollars; `_M` pulled automatically); `reliability: {cv_threshold: 0.30, low: flag}`; `unit: dollars` (design issue 4) |
-| `map_median_household_income__bg_2020` | Visualization | `indicator: median_household_income`; `geography: bg_2020`; `classification: quantile`; `classes: 5`; `colors: Greens`; tooltip shows the standard fields only (name, estimate, MOE, reliability), in dollars |
-
-Used unchanged: `census_api`, `cle_city`, `bg_2020`. This chunk doesn't use `bg_2020__to__cle_city`.
-
-**Computation** (to be written into the Indicator body)
-
-1. Pull `B19013_001E` and `B19013_001M` for every block group in Cuyahoga County (state `39`, county `035`).
-2. Keep the block groups in `bg_2020`. Every `bg_2020` unit must have a **row**. A missing row is an error. A blank **value** with a note is allowed (design issue 3).
-3. **Annotations**: same rule as `population_count`. If the estimate or the MOE is an annotation, the value is blank and the annotation goes in `note`. Medians are often `-666666666` (too few sample cases) at block group level.
-4. **Top- and bottom-coded values**: an estimate of `250001` ("$250,000 or more") or `2499` ("under $2,500") is a placeholder, not a measured value. The value is blank, and `note` reads "top-coded: $250,000 or more" or "bottom-coded: under $2,500" (design issue 2).
-5. `estimate` = B19013_001E, `moe` = B19013_001M.
-6. **Reliability**: CV = (MOE ÷ 1.645) ÷ estimate. `low` if CV > 0.30, otherwise `ok`. Low values are flagged and kept.
-
-**Caveats** (to be written into the Indicator body): values are in 2024 inflation-adjusted dollars. A median can't be summed or averaged across block groups, so there's no citywide value in this chunk. Blank block groups appear gray on the map.
-
-**Outputs** (each with its manifest)
-
-- `outputs/tables/median_household_income__bg_2020.csv`
-- `outputs/visualizations/map_median_household_income__bg_2020.html`
-
-No city table.
-
-**Tests**
-
-- **Spec validation** passes for the whole project.
-- **`kat_002`: Median household income, one block group.** Compares one `bg_2020` value with its published ACS 2020–2024 5-year `B19013_001` value on data.census.gov. Tolerance: `exact`, because the value comes from the same source with no computation. This tests fetching, the GEOID join, and the output, not the method. The agent proposes a block group with a non-blank, non-coded value and a link, and the expert confirms it.
-- **`inv_001`**: new prompt (design issue 1).
-- **`inv_003`: Plain-language income map.** Prompt: "Map median household income by block group in Cleveland." Expected: `runs`, `spec: map_median_household_income__bg_2020`.
-
-**Not in this chunk:** a citywide median, B19001 income brackets, per capita or mean income, poverty (`C17002`), tracts, neighborhoods.
-
-#### Design issues
-
-1. **`inv_001` stops being an unknown indicator.** Its prompt is "Show me median household income by block group," which this chunk makes available. Proposed new prompt: "Show me median gross rent by block group." Keep the test's ID and intent.
-2. **Top and bottom coding aren't annotations.** `lib/census.py` treats only negative codes as annotations, so `250001` and `2499` would pass through as real values. The placeholder values are specific to each table (other medians use other caps), so they don't belong in `lib/`. Proposed: add a `B19013` note under `census_api` `# Notes` (§ 4.1, table-specific notes), and blank these values in the Indicator's compiled code, as in Computation step 4. No `lib/` change. Editing `census_api` sets it back to `draft` (rule 7).
-3. **Expected blanks.** `population_count` treats a missing value as an error. For medians, blanks are normal. Proposed: § 12 *Output tables* says "a missing unit (row) is an error; a blank value with its reason in `note` is allowed." Confirm that no `lib/` check treats blank values as an error. (`output.py` already keeps blanks blank.)
-4. **Dollar format.** `choropleth.py` formats values as either counts (`,.0f`) or percents. Proposed: add an optional `unit` field to Indicator (`count` by default, or `dollars`; percent still comes from `measure`). Update § 4.4, the Indicator template, the validator, and the tooltip and legend formats (`$,.0f`). This is a `lib/` change, so it needs review, and every result reruns.
-
-5. **Separation of concerns (raised by the expert at Stop C, 2026-10-24).** Both Indicator bodies named "every block group in Cuyahoga County". Indicators must be general regardless of geography and point to Geographies only through frontmatter. The gap: nothing in the design said where the request extent belongs, so it landed in the Indicator (and in this roadmap's Computation steps for chunks 1 and 2, which are now superseded). Expert's decisions: (1) derive the extent from the Geography's kept units (new `census_unit` field); (2) the runner applies crosswalks and reliability; (3) no validator check for geography words in bodies (inspection is enough for now); (4) add a validator check that each field is published at the geography's `census_unit`; (5) fix everything in chunk 2, and approve nothing known to be wrong.
-
-Not issues (checked in the code): the validator requires `# Aggregation` only for a median *with* crosswalks; the runner handles an Indicator with no `crosswalks`; `exact` tolerance already exists in `known_answers.py`.
-
-Proposed: apply 1–4 before drafting specs.
-
-Applied 1–4 on 2026-10-24: `inv_001` prompt → "Show me median gross rent by block group."; `census_api` `# Notes` B19013 (now `draft` again, per rule 7); architecture.md § 12 *Output tables* (a missing unit is an error, a blank value isn't, and its `reliability` is blank); `unit` field in § 4 and § 4.4, the Indicator template, and validation.md's list of fields with fixed choices. Issue 3 check: no `lib/` check treats a blank value as an error (`moe.reliability` leaves `reliability` blank, `choropleth` draws gray and leaves blanks out of the breaks, `output` keeps blanks blank; `crosswalk.apply_count` stops on blanks, but only for counts moved through a crosswalk).
-
-**Task 4 findings (2026-10-24):** `B19013_001E` = "Median household income in the past 12 months (in 2024 inflation-adjusted dollars)", `_M` listed. Published at block group level: all 429 `bg_2020` units have a row. Codes, per the Census Bureau's annotation notes: `2499` = "2,500-" and `250001` = "250,000+", each with MOE `-333333333` ("median falls in the lowest or highest interval of an open-ended distribution"). In Cleveland: 90 block groups have estimate `-666666666` (MOE `-222222222`), 4 are bottom-coded, 0 are top-coded (9 elsewhere in the county). That leaves **335** block groups with a value and **94** blank.
-
-#### Stop B questions (chunk 2) — answered 2026-10-24
-
-1. **`kat_002`:** the agent proposes block group `390351198002` (Block Group 2, Tract 1198): **$42,344 ± $13,701**, near the middle of Cleveland's values, published and uncoded. Confirm on <https://data.census.gov/table/ACSDT5Y2024.B19013?g=1500000US390351198002>. → **Confirmed.**
-2. **`census_api` re-approval:** it went back to `draft` when the B19013 note was added. Until you approve it again, chunk 1's outputs can't run in run mode. → **Approved;** `census_api` is `stable` again.
-3. **Annotation rule wording** (Computation steps 3–4): drafted so that if the estimate *or* the MOE is an annotation, **both** `estimate` and `moe` are blank. Coded values (whose MOE is `-333333333`) get only the coded note ("bottom-coded: under $2,500"), not the annotation code. OK? → **OK.**
-4. **A mismatch found in chunk 1's reviewed code:** `population_count`'s spec (step 3) says a block group whose estimate *or* MOE is an annotation gets a blank value. Its code blanks only the field that holds the annotation, so an annotated MOE would leave the estimate in place. This has no effect on current data (no B01003 block group has an annotation). Proposed: add one shared helper in `lib/census.py` (estimate + MOE + note, with the both-blank rule), use it in both Indicators, and recompile `population_count` for your review. Its results would rerun with the same values. Or leave `population_count` alone and note it. → **Expert: if only the MOE is an annotation, the estimate stays.** So the spec changes, not the helper: `population_count` step 3 now says an annotated estimate blanks both, and an annotated MOE alone blanks only `moe`. Step 8 was added (blank estimate or MOE → blank `cv` and `reliability`), and step 2 now says *row*, matching § 12. The spec is `draft` again (rule 7) and its code is stale. The code needs one change, recompiled in task 6: blank `moe` when the estimate is an annotation (it currently keeps it).
-
-**Follow-ups (answered 2026-10-24):**
-
-- **City total with blank parts → option B.** The sums use the block groups that have a value, and `note` says how many were left out. Written into `population_count` step 5. Needs a `lib/` change in task 6: `crosswalk.apply_count` currently stops on any blank.
-- **General principle (expert):** compute with flagged uncertainty rather than stop. Stop only for structural problems. Added to architecture.md § 12 *Output tables*.
-- **Consistency:** `median_household_income` step 3 now uses the same annotation rule as `population_count` (an annotated estimate blanks both; an annotated MOE alone blanks only `moe`). Step 4 (coded values) overrides it. Step 6 matches `population_count` step 8.
-
-#### Stop C review (chunk 2)
-
-**Results**
-
-- `median_household_income__bg_2020`: 429 rows. **335** have a value ($6,130–$158,438). **94** are blank: 90 with `B19013_001E=-666666666; B19013_001M=-222222222` and 4 `bottom-coded: under $2,500`. Reliability: 198 `ok`, 137 `low` (CV max 0.60), 94 blank. Every blank value has blank `moe`, `cv` and `reliability`.
-- Map: quantile breaks $27,071 / $38,494 / $47,276 / $59,577 (from the 335 values); legend and tooltip in dollars; blanks gray.
-- `kat_002`: **pass** (42,344 = 42,344, exact). `kat_001`: **pass** (366,340, +0.07%), unchanged.
-- `population_count` (recompiled): same values as chunk 1 (429 block groups, city 366,340 ± 7,663, 292 `ok` / 137 `low`). No block group has a blank estimate or MOE, so the new partial-sum note doesn't appear.
-- Spec validation: 0 errors. Warnings are only "draft / unreviewed" (expected). Field check: B19013_001E label matches.
-- A `lib/` change made every result rerun on its own (`lib_hash`, from the chunk 1 retro), with no `--force`.
-- No API key in `data/`, `outputs/`, `build/`, code, or specs.
-
-**Invocation tests (expert, fresh sessions, plain prompts, 2026-10-24):**
-
-- `inv_001` ("Show me median gross rent by block group."): ✅ **pass** (reported by the expert).
-- `inv_002` ("Map the population count by block group in Cleveland."): resolved to `map_population_count__bg_2020` and went through `lib.runner`. The runner, in run mode (the default), refused: `population_count` is `draft` with unreviewed code. **Routing passed; no output**, as run mode requires.
-- `inv_003` ("Map median household income by block group in Cleveland."): resolved to `map_median_household_income__bg_2020` and went through `lib.runner`. Run mode refused: the map and Indicator are `draft`, and the code is unreviewed. **Routing passed; no output**, as run mode requires.
-- **Decision (expert, 2026-10-24): option (a).** Approve first, then run the `runs` tests. `inv_002` and `inv_003` will be rerun after approval.
-- **Retro note:** `runs` tests run before approval always hit run mode's refusal, so they test routing but not the run itself. Options: (a) at Stop C, approve first (`verified`, `stable`), then run the invocation tests; (b) define `runs` as "resolves to `spec` and invokes the runner", and accept a readiness refusal as a pass while specs are `draft`.
-
-**Design issue 5 applied (2026-10-24)**
-
-- architecture.md: new *Separation of concerns* table in § 4 (with the test "changing an Indicator's `geography` must not require editing its body"); `census_unit` and the derived extent in § 4.2; § 4.4 says the body is about the measure, and lists what `lib/` does for every Indicator; § 7 runner; § 12 now holds the generic rules that were repeated in Indicator bodies (reliability at every geography, estimate 0, blank estimate or MOE, counts through a crosswalk, "not published" nulls).
-- Templates: `census_unit` in Geography; a body note in Indicator. validation.md: `census_unit` choices, "Indicator with Census data → geography has `census_unit`", and the publication check.
-- Specs: `bg_2020` gets `census_unit: block group`. `census_api`: Access uses placeholders and says unpublished fields return `null`; the annotation rule now lives in its Notes (stated once, linked from both Indicators); the Cleveland counts are removed from the B19013 note. `bg_2020__to__cle_city` Edge cases now hold the city-total caveat that was in `population_count`. Both Indicator bodies cover only the measure: `population_count` has 2 steps, `median_household_income` has 3.
-- `lib/`: `census.requests_for` (extent from GEOIDs: one request per state, a list of counties) and `null` handling in `census.read`; `Context.acs(entry)` fetches for the Indicator's geography, joins, and stops on a missing unit or a field not published anywhere; `runner.report` applies crosswalks (`count` only for now) and reliability; validator `census_unit` and publication checks (tested: B17001 at block group is reported as not published).
-- Code recompiled: both Indicators now return one table at their own geography and name no Geography, Crosswalk, or place.
-- Result: all three tables are **byte-identical** to the previous run, and no new snapshot was fetched (the derived request matches the old one). `kat_001` and `kat_002` pass. Validation: 0 errors.
-
-**To review**
-
-- `lib/` changes: `census.py` (new `estimate_moe` helper; **bug fix** in `read`: the annotation note was filled with a printed copy of a whole pandas column, an f-string bug latent since chunk 1 that B19013 exposed); `crosswalk.py` (`apply_count` sums the values it has and notes what's missing, with a `label` for the unit name, instead of stopping); `choropleth.py` + `runner.py` (`unit: dollars` → `$,.0f`); `validate.py` (`unit` choices).
-- `pipeline/indicators/population_count.py` (recompiled: uses `estimate_moe`, city note label) and `pipeline/indicators/median_household_income.py` (new). Each needs a `verified` line.
-- Specs to set `stable`: `census_api`, `bg_2020`, `bg_2020__to__cle_city`, `population_count`, `median_household_income`, `map_median_household_income__bg_2020` (`cle_city` and `map_population_count__bg_2020` are unchanged and still `stable`).
-- Also changed by design issue 5: `lib/census.py` (`requests_for`, nulls), `lib/runner.py` (`Context.acs`, `report`), `lib/validate.py`, and both code files again.
-
-#### Tasks
-
-1. Run the carried-over invocation tests (`inv_001`, `inv_002`) from the plain prompt in a fresh session, and record the results.
-2. Create `chunk/02-bg-median-income` from `main`.
-3. Apply design issues 1–4.
-4. Check `B19013_001E` against `variables.json` for `acs/acs5` 2024. Confirm that B19013 is published at block group level, and record the top- and bottom-code values it uses.
-5. Draft the two specs, update each folder's `index.md`, add `kat_002` (with a proposed block group) and `inv_003`, and update `inv_001`. 🛑 **Stop B.**
-6. Extend `lib/` for `unit: dollars`. Compile `pipeline/indicators/median_household_income.py`.
-7. Run validation, `kat_001`, `kat_002` and the invocation tests, then produce the outputs. 🛑 **Stop C.**
-8. Retro per the working method.
-
-#### Decisions (2026-10-24)
-
-- **Indicator:** median household income, `B19013_001E`, ACS 2020–2024 5-year.
-- **Geography:** block group only. The citywide median is deferred.
-- **Top- and bottom-coded values:** blank, with a note.
-- **Reliability:** CV 0.30, flag.
-- **Map:** quantile, 5 classes, `Greens`.
-- **Visualization reuse:** keep one Visualization spec per map, even though this map's settings nearly match chunk 1's. Shared defaults are recorded as future scope in [architecture.md § 13](architecture.md#13-deferred) (*Shared Visualization defaults*), with the triggers for revisiting them.
-
-**Other income variables considered (for later chunks):** B19001 households by income bracket (16 brackets, `percent`, aggregates to the city through `nested`, and is the basis for a citywide median); B19301 per capita income, or B19313 aggregate income ÷ B01003 population (a ratio that could build on `population_count`); B19025 aggregate household income ÷ households (mean household income); C17002 ratio of income to poverty level (the block-group-level poverty table, because B17001 isn't published for block groups).
+_None. The next chunk is defined in chat with the expert (step 1 of the working method)._
 
 ---
 
 ## Completed chunks
+
+### Chunk 2 — Block group median household income   (merged 2026-10-24)
+Delivered:
+  - Specs (all `stable`): new `median_household_income` (`measure: median`, `unit: dollars`, B19013_001E) and `map_median_household_income__bg_2020` (quantile, 5, `Greens`). Changed and re-approved: `census_api`, `bg_2020` (`census_unit`), `bg_2020__to__cle_city`, `population_count`.
+  - Code: `pipeline/indicators/median_household_income.py` (new) and `population_count.py` (recompiled twice), both verified. `lib/`: `unit: dollars` in maps; partial sums with a note in `crosswalk.apply_count`; `census.estimate_moe`, `census.requests_for` (extent derived from GEOIDs), `null` handling; `Context.acs(entry)` fetches for the Indicator's geography; `runner.report` applies crosswalks and reliability; validator checks for `unit`, `census_unit`, and publication at a level.
+  - Outputs: `median_household_income__bg_2020.csv` (335 values, 94 blank: 90 too few sample cases, 4 bottom-coded) and its map; chunk 1's outputs rebuilt with identical values.
+  - Tests: `kat_002` (pass, exact: $42,344 for block group 390351198002); `inv_001` reworded (median gross rent), `inv_003` added; `inv_001`–`inv_003` passed in fresh sessions after approval.
+Retro:
+  - Worked: the chunk 1 pipeline took a second Indicator with small `lib/` additions. `lib_hash` made every result rerun after a `lib/` fix, with no `--force`. Deriving the request extent from the Geography reproduced the old request exactly: same snapshot, byte-identical tables. Fresh-session invocation tests passed once specs were approved.
+  - Broke: a latent bug in `census.read` (since chunk 1) filled the note with a printed pandas column whenever a value held a Census code; B19013 exposed it, and it's fixed. Chunk 1's reviewed code didn't match its spec's annotation rule; found while checking design issue 3, and resolved by changing the spec to the expert's rule. `runs` invocation tests run before approval hit run mode's refusal.
+  - Agent needed correction on: geography in Indicator bodies ("every block group in Cuyahoga County"). The agent copied it from the roadmap's requirements without challenging it; the expert caught it at Stop C (design issue 5). Proposing "stop the run" for incomplete data; the expert's principle is to compute with flagged uncertainty. Proposing "both blank" for an annotated MOE; the expert keeps the estimate.
+  - Open points: medians at other geographies (B19001 interpolation) are deferred. The crosswalk helper still handles only `nested` with `from.within == to`. Moving a `percent`, `rate` or `median` through a crosswalk isn't built yet (the runner says so).
+Design changes:
+  - architecture.md: *Separation of concerns* table and test (§ 4); `census_unit` and the derived extent (§ 4.2); the Indicator body is about the measure (§ 4.4); optional `unit` (§ 4.4); the runner applies crosswalks and reliability (§ 7); § 12 now holds the expert's principle "compute with flagged uncertainty rather than stop", "a missing unit is an error, a blank value is not", "not published" nulls, and the generic reliability and crosswalk-sum rules; dollar display.
+  - Templates: `census_unit` (Geography), `unit` and a body note (Indicator). validation.md: `unit` and `census_unit` choices, "Indicator with Census data → geography has `census_unit`", and the publication check.
+  - Existing work brought in line: `census_api` Notes now hold the annotation rule (stated once) and no Cleveland counts; the city-total caveat moved to `bg_2020__to__cle_city`; `population_count` was recompiled to the new rules. Invocation `runs` tests happen after approval (expert's decision).
+  - Rejected: a validator check for geography words in Indicator bodies (inspection is enough for now; revisit if it recurs).
 
 ### Chunk 1 — Block group population count   (merged 2026-10-21)
 Delivered:
@@ -306,3 +181,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Expert reported `inv_001` passed. | 🛑 Stop C: expert review and approval; decide when `runs` tests happen. |
 | 2026-10-24 | Claude Code | Expert's review: Indicator bodies named Cuyahoga County (separation of concerns). Applied design issue 5: `census_unit` + derived extent, runner applies crosswalks and reliability, generic rules moved to § 12 and `census_api`, publication check. Outputs byte-identical. | 🛑 Stop C: expert reviews and approves (6 specs, 2 code files); decide when `runs` tests happen. |
 | 2026-10-24 | Claude Code | Expert approved all changes: 6 specs `stable`, 2 code files `verified`. `runs` tests happen after approval (option a). Validation clean; all outputs up to date. | Expert reruns `inv_002` and `inv_003` in fresh sessions. Then task 8 (retro). |
+| 2026-10-24 | Claude Code | Expert reran `inv_002` and `inv_003` after approval: both passed. Task 8: retro recorded, checklist updated, `chunk/02-bg-median-income` merged into `main`. | Define chunk 3 in chat. |
