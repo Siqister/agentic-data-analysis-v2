@@ -3,7 +3,7 @@ type: Resource
 title: Cleveland Police crime incidents
 description: Offenses reported to the Cleveland Division of Police, one row per offense, with point locations.
 resource: data/static/cle_crime/Crime_Incidents_P1RMS_-6429680527207168309.gpkg
-status: draft
+status: stable
 tags: [crime, police]
 ---
 

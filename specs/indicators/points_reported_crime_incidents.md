@@ -2,7 +2,7 @@
 type: Indicator
 title: Reported crime incidents (NIBRS Group A)
 description: Locations of reported crime incidents with at least one NIBRS Group A offense, one point per incident, in a set time window.
-status: draft
+status: stable
 tags: [crime, points]
 
 measure: points

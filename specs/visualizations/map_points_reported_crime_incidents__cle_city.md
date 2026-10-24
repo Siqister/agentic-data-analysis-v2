@@ -2,7 +2,7 @@
 type: Visualization
 title: Reported crime incidents, 30 Nov 2025 – 30 Sep 2026
 description: Hexbin heat map of reported crime incidents (NIBRS Group A) in the City of Cleveland.
-status: draft
+status: stable
 
 map: hexbin
 indicator: points_reported_crime_incidents

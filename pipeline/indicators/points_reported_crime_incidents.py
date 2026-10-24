@@ -1,6 +1,7 @@
 # spec: specs/indicators/points_reported_crime_incidents.md
 # spec_hash: sha256:efc57ca2c1f8ccd64609ebd77b5933641eaa753be0739c2ded740630bba2f894
 # generated: { by: claude-code, at: 2026-10-24T16:56:15-04:00 }
+# verified: { by: human:siqi, at: 2026-10-24T17:59:48-04:00 }
 """Reported crime incidents (NIBRS Group A). Steps follow the spec's # Computation.
 
 Returns the selected points (EPSG:3734) and the rows excluded at each step, by reason;
