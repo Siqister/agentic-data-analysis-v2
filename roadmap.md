@@ -98,7 +98,228 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 ## Current chunk
 
-_None. The next chunk is defined in chat with the expert (step 1 of the working method)._
+### Chunk 3 — Spatial distribution of reported crime incidents
+
+**Analysis question:** where were reported crime incidents located over a set time window? This chunk shows the spatial distribution as a hexbin heat map. Counts ("how many") come in a later chunk that builds on this one.
+
+**Brief:** the first point dataset and the first map that isn't a choropleth.
+- The crime incidents file becomes a local-file Resource.
+- A new kind of Indicator, a reviewed **selection** of points (`measure: points`), does all the filtering: time window, offense types, incident rule, city clip.
+- A hexbin Visualization draws it.
+- The heat map embeds only hexes and their classes, never points.
+
+**Branch:** `chunk/03-crime-heatmap`
+
+**Status:** ✅ Stop A passed 2026-10-24: requirements approved by the expert, including the proposed fixes for design issues 1–10 (5 dropped) and the agent's defaults for the Stop A questions (decisions 18–21). Next: task 1, in Claude Code.
+
+**Exercises (capability checklist):**
+- Existing items: local file resource, point dataset.
+- New items to add: selection Indicator (`measure: points`), hexbin Visualization.
+- Point aggregation stays ☐ until the counts chunk.
+
+_Place and unit words in this section are requirements. They do not go into the Indicator body (chunk 2, design issue 5)._
+
+#### Requirements
+
+**Specs to draft** (all `status: draft`)
+
+| ID | Type | Settings |
+|---|---|---|
+| `cle_crime` | Resource | `resource: data/static/cle_crime/Crime_Incidents_P1RMS_-6429680527207168309.gpkg`; no `auth`, no `datasets`. Body: About (City of Cleveland, Division of Police; portal link; daily updates; downloaded by the expert as a GeoPackage on 2026-10-24), Access (GeoPackage, one layer `Crime_Incidents`, geometry column `SHAPE`, points in EPSG:3857; times stored in UTC), Schema (fields used, with plain meanings, plus the NIBRS Group A/B list of `IncidentDesc` values), Notes (below). |
+| `points_reported_crime_incidents` | Indicator | `measure: points`; `geography: cle_city` (clip extent); no `crosswalks`, `reliability` or `unit`; `window: { field: OffenseDate, from: 2025-11-30, to: 2026-09-30 }`; `data`: `cle_crime`, fields `CaseNumber`, `IncidentDesc`, `OffenseDate`, `SHAPE`. |
+| `map_points_reported_crime_incidents__cle_city` | Visualization | `map: hexbin`; `indicator: points_reported_crime_incidents`; `geography: cle_city`; `hex_size_m: 500`; `classification: quantile`; `classes: 5`; `colors: Purples` (agent's proposal, see Stop A question 4). |
+
+Used unchanged: `cle_city`. Not used: `census_api`, `bg_2020`, `bg_2020__to__cle_city`.
+
+**Computation** (to be written into the Indicator body, without place names)
+
+1. Read the named fields from the Resource.
+2. Keep rows whose `IncidentDesc` is a NIBRS Group A offense type, per the Resource's list. Exclude Group B, rows with no `IncidentDesc`, and Justifiable Homicide (a Group A code that isn't a crime).
+3. Keep rows whose `OffenseDate`, converted from UTC to Eastern time (America/New_York), falls on a date in the window, both dates inclusive.
+4. One point per incident: group the kept rows by `CaseNumber`. All rows in a case share one location and date (checked: none differ), so take the first.
+5. Apply the point rules below.
+6. Output: `CaseNumber`, `OffenseDate`, point (EPSG:3734). Record the number excluded at each step, by reason.
+
+**Point rules** (Indicator `# Point rules`, § 4.4)
+- **Outside the clip extent:** points outside the `geography` boundary are excluded. Tested against the boundary in EPSG:3734, not the `City` field.
+- **On the boundary:** a point on the boundary line counts as inside.
+- **Accepted geocodes:** any row with a point. Rows with no point ("Not Located") are excluded.
+- **Denominator:** none. This is a selection, not a rate.
+
+**Expected size** (sanity check at Stop C, not a known-answer test)
+- About 31,594 incidents before the point rules (Eastern dates; it would be 31,582 if the UTC dates were used).
+- 106 have no point.
+- 129 have a `City` other than Cleveland.
+- So expect roughly 31,360 points.
+
+**Caveats** (Indicator `# Caveats`, without place names)
+- These are crimes **reported to police**. Many crimes are never reported, and reporting rates differ by offense type and by community.
+- Incidents, not offenses or victims: an incident with several offenses or several victims is one point.
+- Located where the incident happened, not where victims or residents live. Places with many visitors and few residents look dense.
+- Some Group A offenses (drug, weapon law violations) mostly reflect police activity, not underlying crime levels.
+- All Group A offense types are pooled, so the pattern mixes very different crimes.
+- Not comparable with figures from the FBI's old Summary Reporting System (hierarchy rule) or with the City's legacy pre-2025-11-11 dataset.
+- Late reports: offenses near the end of the window may still be reported after the download.
+- Excluded rows are listed by reason in the manifest.
+
+**Design choices** (Visualization `# Design choices`)
+- Why 500 m, and that it's at or above the 250 m floor.
+- The pattern depends on hex size and grid origin.
+- Classes are relative (quantiles), and no counts are shown.
+
+**Outputs** (each with its manifest)
+
+- `build/points/points_reported_crime_incidents__cle_city.gpkg`: the selection. Intermediate, not committed, never published (design issue 3).
+- `outputs/visualizations/map_points_reported_crime_incidents__cle_city.html`
+
+No table in `outputs/tables/`.
+
+**Tests**
+
+- **Spec validation** passes for the whole project, including the new checks (design issues 1, 2, 6, 8).
+- **No known-answer test** (decision 9). The expected size above is checked by eye at Stop C.
+- **`inv_004`: plain-language heat map.** Prompt: "Show me a heat map of reported crime in Cleveland." Expected: `runs`, `spec: map_points_reported_crime_incidents__cle_city`.
+- **`inv_005`: counts aren't available yet.** Prompt: "How many crimes were reported in each block group?" Expected: `not_available`. The agent must not count points from the selection outside a spec.
+- Existing `inv_001`–`inv_003` still pass (run at least once this chunk).
+
+**Not in this chunk:** counts, block groups, crosswalks, neighborhoods, wards, rates, breakdowns by offense type, other time windows, continuous (kernel density) surfaces.
+
+#### Design issues
+
+Found by checking the requirements against architecture.md, AGENTS.md, validation.md, the templates and `lib/`. Proposed fixes:
+
+1. **`measure: points` Indicator.**
+   - Changes: § 4.4, the Indicator template, AGENTS.md glossary ("Indicator: one measure, or a reviewed selection of data"), validation.md choices, and `lib/validate.py`.
+   - A `points` Indicator has `geography` (its clip extent) and an optional `window`. It has no `crosswalks`, `reliability` or `unit`.
+   - § 4.4 *Separation of concerns*: its body may name its Resource's fields, but still no place names.
+   - Naming table (§ 12): Indicator IDs for selections start with `points_`.
+2. **`window` field.** `{ field, from, to }` with ISO dates, both inclusive. The validator checks that `field` is one of the Indicator's `data` fields and that `from` ≤ `to`.
+   - The file stores times in UTC (`Z`). Its own `HourofDay`, `OffenseDay`, `OffenseMonth` and `OffenseYear` fields match the times converted to Eastern time (checked: 69,732 of 69,735 rows), not the stored values.
+   - Proposed § 12 convention: dates are local dates in America/New_York. A UTC time is converted before its date is taken. `lib/` does this for `window`, so compiled code doesn't repeat it.
+3. **The runner for `points` Indicators** (`lib/runner.py`, `lib/output.py`, § 7, § 8, § 11):
+   - Compiled code returns a point GeoDataFrame (`CaseNumber`, `OffenseDate`, geometry in EPSG:3734), plus exclusion counts.
+   - The runner skips the per-unit table checks and reliability.
+   - It writes `build/points/<id>__<geography>.gpkg` with a manifest next to it. The manifest uses the same `fingerprint` and `lib_hash` staleness as now, plus an `excluded` block (reason → count).
+   - `run_visualization` reads from there.
+   - `build/` isn't committed, so the points never reach `outputs/`.
+4. **Reading a file Resource** (`lib/runner.py` `Context`):
+   - A new `ctx.features(entry)` reads the Resource's layer through a snapshot and returns only the fields named in `data`, as AGENTS.md rule 3 requires.
+   - The geometry is converted to EPSG:3734.
+   - A `data` entry for a file Resource has `resource` and `fields` only. The validator already skips the approved-list check when a Resource has no `datasets`.
+   - A GeoPackage with one layer, like `cle_city`, so the existing local-file snapshot (hashed in place) and geopandas/pyogrio reading work as they are.
+5. ~~A snapshot of a folder~~ **Dropped.** The expert re-downloaded the data as a single GeoPackage, so the existing one-file snapshot works. The number is kept so later references stay stable.
+6. **Field check for file Resources** (validation.md *Data fields*, `lib/validate.py`):
+   - The current check is Census-only and needs network access.
+   - Add an offline check: every field named in a file Resource's `data` entry exists in the layer.
+7. **Hexbin Visualization** (§ 4.5, Visualization template, AGENTS.md glossary, validation.md, `lib/validate.py`):
+   - New optional `map` field: `choropleth` (default) or `hexbin`.
+   - `hexbin` requires `hex_size_m`, `classification`, `classes` and `colors`, and its `indicator` must be `measure: points`. `choropleth` keeps its current fields and requires a non-`points` Indicator.
+   - § 2 diagram unchanged.
+   - Move *Other chart types* out of § 13.
+8. **Privacy floor** (§ 12, `lib/validate.py`): hex size at least **250 m** across flats. No output may contain raw points: maps embed hexes only, and the selection stays in `build/`.
+9. **`lib/heatmap.py`** (new, needs review), alongside `choropleth.py` and using the same pinned D3:
+   - Builds a pointy-top hex grid in EPSG:3734. Size is converted from metres; the origin is fixed in `lib/` at (0, 0), so reruns and any future map share the grid.
+   - Keeps the hexes that intersect the clip geography, clipped to its outline.
+   - Counts points per hex and assigns quantile classes.
+   - Embeds only hex shapes (EPSG:4326) and class labels.
+   - The tooltip shows the class ("2 of 5"). The legend runs low to high with no counts.
+   - The source note comes from the Resource and Geography titles. `runner.source_note` drops the "Margins of error at 90% confidence." sentence when no data is from the Census.
+10. **Scope and conventions:**
+    - § 1: map types beyond choropleths are in scope; a heat map shows patterns below block-group level, aggregated above the floor.
+    - § 12 *Maps*: how empty and edge hexes look (Stop A questions 1–2).
+    - § 7 helper table: add selection and heat map helpers.
+    - Definition of done: record the chunk 3 exception (no known-answer test) in the retro.
+
+Proposed: apply 1–10 before drafting specs.
+
+#### Stop A questions
+
+Answered 2026-10-24: the expert accepted the agent's suggested default for each. Recorded as decisions 18–21.
+
+#### Tasks
+
+1. Commit the chunk 3 plan (this roadmap) on `main`, then create `chunk/03-crime-heatmap` from `main`.
+2. Apply design issues 1–10 (docs, templates, validator). `lib/` changes are reviewed at Stop C.
+3. Draft `cle_crime`, `points_reported_crime_incidents` and `map_points_reported_crime_incidents__cle_city`, update each folder's `index.md`, and add `inv_004` and `inv_005`. Run the new field check against the geodatabase. 🛑 **Stop B.**
+4. Build the `lib/` changes (`ctx.features`, Eastern dates for `window`, the `points` runner path, `heatmap.py`). Compile `pipeline/indicators/points_reported_crime_incidents.py`.
+5. Run validation and the invocation tests (`inv_001`–`inv_005`), and produce the outputs. Check the point count against the expected size and the exclusion counts in the manifest. Tune `hex_size_m` with the expert by editing frontmatter and rerunning. 🛑 **Stop C.**
+6. Retro per the working method.
+
+#### Decisions (expert, 2026-10-24)
+
+1. **One point = one incident:** a distinct `CaseNumber` with at least one NIBRS Group A offense. Group B offenses, rows with no NIBRS offense, and rows with no classification are excluded. This follows the NIBRS incident definition (FBI, *A Guide to Understanding NIBRS*).
+2. **Selections are Indicators.** An Indicator can be "a reviewed selection of data", not only a measure.
+   - Marked by `measure: points` and the ID prefix `points_`.
+   - The window doesn't go in the ID, the way the ACS vintage doesn't.
+   - A later count Indicator `builds_on` it.
+   - A different selection (e.g. property crimes only) is a new Indicator, not a parameter.
+3. **The Indicator does all filtering**, including the city clip, which comes from `geography`, not the body. Such an Indicator is tied to one Resource's fields by nature, so it's less reusable than the Census Indicators.
+4. **The window goes in frontmatter**: more readable and checkable. Changing it makes the code stale (recompile and review).
+5. **All Group A offense types**, sex offenses included. No type filter.
+6. **The Visualization only draws.** Map type, hex size, classes and colors are set in the spec, never chosen by the agent.
+7. **Privacy:**
+   - A project-wide floor of 250 m across flats (§ 12, checked by the validator). No suppression of sparse hexes.
+   - The HTML embeds only hexes and classes.
+   - The selection stays in `build/`.
+8. **Map types beyond choropleths are in scope.**
+9. **No known-answer test for this chunk.** The expert accepts this as an exception to the definition of done.
+10. **Window:** `OffenseDate`, 2025-11-30 to 2026-09-30, both inclusive. The expert chose 30 November over the 11 November coverage start. Offense dates 1–10 Nov 2025 are about 75% missing, so the window starts after them either way.
+11. **Hexbin grid:** size is the width across flats, in metres. Start at 500 m; tune at Stop C by editing frontmatter and rerunning (no recompile).
+12. **Legend and tooltip:** relative quantile classes, low to high. No counts shown.
+13. **Resource ID: `cle_crime`.**
+14. **Exclusions** are recorded by reason in the selection's manifest.
+15. **Each point carries** `CaseNumber`, its point, and `OffenseDate`. Nothing else.
+16. **Justifiable Homicide is excluded** and recorded in the manifest.
+17. **5 classes.**
+18. **Empty hexes** (inside the city, no incidents): drawn light gray (`#d9d9d9`), labelled "no incidents". Quantile classes are computed over hexes with at least one incident.
+19. **Edge hexes** are clipped to the city outline. A clipped hex covers less area and tends to fall in a lower class, so `# Design choices` says so.
+20. **Grid origin** is fixed in `lib/` at (0, 0) in EPSG:3734, not a spec field. Every hexbin map shares the grid.
+21. **Colors: `Purples`.** Sequential, distinct from the existing `Blues` and `Greens`, and avoids the alarm of reds for crime.
+
+**The file** (expert's download, read by the agent 2026-10-24)
+- `data/static/cle_crime/Crime_Incidents_P1RMS_-6429680527207168309.gpkg`: a GeoPackage.
+  - One layer, `Crime_Incidents`, geometry column `SHAPE`: 69,749 points in EPSG:3857 (Web Mercator), plus `LAT`/`LON` fields.
+  - Downloaded 2026-10-24. It replaces an earlier File Geodatabase download of the same export: same rows, fields and values (checked).
+  - Source: <https://data.clevelandohio.gov/datasets/e15e8989c83e4cbd841fb171a6c62f68_0/about>. The live layer updates daily.
+- **Coverage starts 2025-11-11**, matching the portal's cutover note ("data from before 11/11/25" lives in a separate legacy dataset).
+  - 6,377 rows were reported earlier, back to 1983, at tens to a few hundred per year.
+  - Their case numbers carry their own years: old cases touched in the new system, not a history.
+- **One row = one offense.**
+  - Since 2025-11-11: 63,372 rows in 54,708 cases. 7,039 cases have 2–11 rows.
+  - Rows in one case share location and time and differ by `Statute`.
+  - `CaseNumber` + `Statute` appears unique.
+  - `PrimaryKey` is not a key (`2147483647` on about half the rows).
+  - `OBJECTID` is assigned per export.
+- **Offense fields:**
+  - `IncidentDesc` is the NIBRS offense type.
+  - `StatDesc` is the city's statute label.
+  - `Statute` is the Ohio Revised Code or Cleveland Codified Ordinance section.
+  - 15,794 rows since 2025-11-11 have no `IncidentDesc`. Of these, 11,198 have no classification at all. The rest are non-crime or non-NIBRS records: "NO CRIME", hit-skip traffic, emergency hospitalization, protection orders.
+- **Group A vs B as they appear in the file:**
+  - 42,224 Group A rows in 36,428 cases. 86% of those cases have one offense.
+  - 5,354 Group B rows. Group B values present: All Other Offenses, Disorderly Conduct, Driving Under the Influence, Drunkenness, Family Offenses (Nonviolent), Liquor Law Violations, Peeping, Runaway, Trespass of Real Property, Bad Checks.
+- **Location:**
+  - 270 rows have no point ("Not Located").
+  - 327 rows have `City` other than Cleveland. Clip against the city boundary, not this field.
+  - Precomputed fields: `NEIGHBORHOOD` (34 + "Not Located"), `WARD` (= `WARD_2026`, 15 wards), `WARD_2014`, and 2020 tract, block group and block GEOIDs.
+  - Points are more precise than `Address_Public`, which is masked to the block ("40XX Arnold Ct"): 28,172 distinct points vs 13,320 addresses.
+- **Time fields:**
+  - `ReportedDate` and `OffenseDate` (datetimes, stored in UTC), plus derived parts (`OffenseYear`, `OffenseMonth`, `OffenseDay`, `HourofDay`, `DOW`, `TimeBlock`) in Eastern time.
+  - `DaysAgo` is counted from the export date. Never use it in a measure.
+  - Reporting lag: 97% of rows are reported within 30 days of the offense, but about 600 are reported a year or more later.
+- **No victim, offender or arrest fields.**
+
+**Resource `# Notes`** (facts about the dataset, true for any pull)
+- Coverage starts 2025-11-11. Earlier rows are a sparse subset, not a history, and are not comparable with the legacy 2016–2025 dataset, which used a different data model.
+- One row is one offense. Several rows can share a `CaseNumber`. `PrimaryKey` is not a key, and `OBJECTID` changes between exports.
+- `IncidentDesc` holds NIBRS offense types. The list of which values are Group A and which are Group B belongs here, so Indicators can link to it.
+- Rows without `IncidentDesc` are non-crime or non-NIBRS records, or not yet classified. On a later download, some unclassified rows may gain a classification.
+- No victim data, so the NIBRS rule "one offense per victim" for crimes against persons can't be applied.
+- `DaysAgo` depends on the export date. Never use it.
+- `ReportedDate` and `OffenseDate` are stored in UTC. The derived fields (`OffenseDay`, `HourofDay`, and so on) are in Eastern time. Convert before taking a date: an evening incident has the next day's UTC date.
+- Points are more precise than the block-masked address. Never publish raw points; maps embed only aggregated surfaces at or above the § 12 floor.
+- Late reports: counts for recent months grow on later downloads.
+- Geometry is EPSG:3857. The clip and any area or distance work use EPSG:3734 (§ 12).
 
 ---
 
@@ -182,3 +403,9 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Expert's review: Indicator bodies named Cuyahoga County (separation of concerns). Applied design issue 5: `census_unit` + derived extent, runner applies crosswalks and reliability, generic rules moved to § 12 and `census_api`, publication check. Outputs byte-identical. | 🛑 Stop C: expert reviews and approves (6 specs, 2 code files); decide when `runs` tests happen. |
 | 2026-10-24 | Claude Code | Expert approved all changes: 6 specs `stable`, 2 code files `verified`. `runs` tests happen after approval (option a). Validation clean; all outputs up to date. | Expert reruns `inv_002` and `inv_003` in fresh sessions. Then task 8 (retro). |
 | 2026-10-24 | Claude Code | Expert reran `inv_002` and `inv_003` after approval: both passed. Task 8: retro recorded, checklist updated, `chunk/02-bg-median-income` merged into `main`. | Define chunk 3 in chat. |
+| 2026-10-24 | Chat | Started chunk 3 (reported crime incidents by block group): read the crime incidents geodatabase, agreed on a thin vertical slice, chose incidents (cases with a Group A offense) as the unit, recorded caveats by spec and design issues 1–3 in Current chunk. | Expert answers open questions 2–7. Then design check and 🛑 Stop A. |
+| 2026-10-24 | Chat | Reframed chunk 3 as a heat map of reported crime incidents, with no counts. Decisions 2–9: selection Indicator (`measure: points`, `points_` prefix, `window` in frontmatter), filtering in the Indicator, heat map in `lib/heatmap.py` embedding no points, privacy floor in § 12, choropleth-only scope lifted, no known-answer test. | Expert answers open questions 1–6 (map type in a follow-up). Then design check and 🛑 Stop A. |
+| 2026-10-24 | Chat | Chunk 3 decisions 10–15: window `OffenseDate` 2025-11-30 to 2026-09-30; hexbin grid, 500 m to start, tuned at Stop C; floor 250 m, no sparse-hex rule; relative quantile classes; Resource ID `cle_crime`; exclusions in the manifest; points carry case, point, date. | Expert answers open questions 1–2. Then design check against architecture.md and 🛑 Stop A. |
+| 2026-10-24 | Chat | Chunk 3 decisions 16–17 (exclude Justifiable Homicide; 5 classes, colors proposed). Step 2 design check: design issues 1–10, Stop A questions 1–4, tasks, and specs to draft written into Current chunk in chunk 2's format. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
+| 2026-10-24 | Chat | Expert re-downloaded the crime data as one GeoPackage (same export, checked). Design issue 5 (folder snapshot) dropped. Found that times are stored in UTC: the window uses Eastern dates (design issue 2, Computation step 3, Resource Notes); expected size updated to about 31,360. | 🛑 Stop A. |
+| 2026-10-24 | Chat | ✅ Stop A passed: expert approved chunk 3 requirements and design issues 1–10 (5 dropped); Stop A questions settled with the agent's defaults (decisions 18–21: empty hexes gray, edge hexes clipped, origin (0, 0) in `lib/`, `Purples`). | Claude Code: task 1 (commit the plan on `main`, create the branch). Stop B after specs are drafted. |
