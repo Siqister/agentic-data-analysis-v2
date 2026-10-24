@@ -441,6 +441,7 @@ cleveland-analysis/
 
 - Values are stored at full precision and rounded only for display: percentages to 1 decimal place, counts and dollars to whole numbers (dollars with a `$`).
 - **Missing or suppressed values are left blank, never 0**, with the reason in `note`.
+- **Compute with flagged uncertainty rather than stop.** When some inputs are blank, compute from the ones that have values and say what was left out in `note`. Stop only for structural problems (a missing unit, a broken join, a spec that doesn't say what to do), never because data is incomplete. (Expert's principle, chunk 2.)
 - **A missing unit is an error; a blank value is not.** Every unit of the geography gets a row. A unit with no row in the source stops the run. A unit whose value is blank (an annotation, a coded value, suppression), with its reason in `note`, is a normal result, and its `reliability` is blank.
 
 ### Maps
