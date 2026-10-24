@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from datetime import date, datetime
 
 import requests
 
@@ -18,6 +19,7 @@ from lib.compiled import code_path, code_status, read_header
 from lib.specs import FOLDERS, SPECS, Spec, dependencies, dependents, load_all
 
 COMMON = ["type", "title", "description", "status"]
+HEX_FLOOR_M = 250   # privacy floor for hexbin maps (architecture.md § 12)
 REQUIRED = {
     "Resource": ["resource"],
     "Geography": ["resource", "id_field"],
@@ -29,10 +31,11 @@ CHOICES = {
     "status": {"draft", "stable", "deprecated"},
     "method": {"population_weighted", "areal", "centroid", "nested"},
     "weights": {"total_population", "households", "housing_units"},
-    "measure": {"percent", "rate", "count", "median", "index"},
+    "measure": {"percent", "rate", "count", "median", "index", "points"},
     "unit": {"count", "dollars"},
     "within_rule": {"majority_area", "centroid", "any"},
     "census_unit": {"block group", "tract"},
+    "map": {"choropleth", "hexbin"},
     "classification": {"quantile", "equal_interval", "natural_breaks", "manual"},
 }
 
@@ -115,6 +118,8 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
                     approved = {(d.get("dataset"), d.get("vintage")) for d in res.meta["datasets"]}
                     if (entry.get("dataset"), entry.get("vintage")) not in approved:
                         err(f"{f} — {entry.get('dataset')} {entry.get('vintage')} is not on {res.id}'s approved `datasets` list")
+                elif res and (entry.get("dataset") or entry.get("vintage")):
+                    err(f"{f} — {res.id} has no `datasets`, so its `data` entry takes `resource` and `fields` only")
                 if not entry.get("fields"):
                     err(f"{f} — a `data` entry has no `fields`")
                 geo = specs.get(m.get("geography"))
@@ -122,8 +127,33 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
                     err(f"{f} — uses Census data, but its geography {geo.id} has no `census_unit`")
             if m.get("measure") in ("median", "index") and m.get("crosswalks") and "Aggregation" not in s.sections():
                 err(f"{f} — a {m['measure']} with crosswalks needs an `# Aggregation` section")
+            if m.get("measure") == "points":
+                for k in ("crosswalks", "reliability", "unit"):
+                    if m.get(k):
+                        err(f"{f} — a points Indicator has no `{k}`")
+                if "Point rules" not in s.sections():
+                    err(f"{f} — a points Indicator needs a `# Point rules` section")
+            elif "window" in m:
+                err(f"{f} — only a points Indicator has a `window`")
+            if "window" in m:
+                _check_window(f, m, err)
         if s.type == "Visualization":
             ind = specs.get(m.get("indicator"))
+            hexbin = m.get("map") == "hexbin"
+            if ind and ind.type == "Indicator" and (ind.meta.get("measure") == "points") != hexbin:
+                need = "a points Indicator" if hexbin else "a non-points Indicator"
+                err(f"{f} — a {'hexbin' if hexbin else 'choropleth'} map needs {need}; "
+                    f"{ind.id} is {'not ' if hexbin else ''}a points Indicator")
+            if hexbin:
+                size = m.get("hex_size_m")
+                if not isinstance(size, (int, float)) or isinstance(size, bool):
+                    err(f"{f} — a hexbin map needs `hex_size_m` (hex width across flats, in metres)")
+                elif size < HEX_FLOOR_M:
+                    err(f"{f} — `hex_size_m: {size}` is below the {HEX_FLOOR_M} m privacy floor")
+                if m.get("also_show"):
+                    err(f"{f} — `also_show` only applies to choropleth maps")
+            elif "hex_size_m" in m:
+                err(f"{f} — `hex_size_m` only applies to hexbin maps")
             if ind and ind.type == "Indicator":
                 at = [ind.meta.get("geography")] + [specs[c].meta.get("to") for c in ind.meta.get("crosswalks") or [] if c in specs]
                 if m.get("geography") not in at:
@@ -145,9 +175,49 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
     _check_indexes(specs, err)
     _check_code(specs, err, warn)
     _check_tests(specs, err)
+    _check_file_fields(specs, err)
     if network:
         _check_fields(specs, r)
     return r
+
+
+def _check_window(f, m, err):
+    """`window: { field, from, to }`: field is a data field; ISO dates, from ≤ to."""
+    w = m["window"]
+    if not isinstance(w, dict) or any(k not in w for k in ("field", "from", "to")):
+        err(f"{f} — `window` needs `field`, `from` and `to`")
+        return
+    fields = {k for e in m.get("data") or [] if isinstance(e, dict) for k in (e.get("fields") or {})}
+    if w["field"] not in fields:
+        err(f"{f} — `window.field` {w['field']!r} is not one of its `data` fields")
+    dates = [w["from"], w["to"]]
+    if not all(isinstance(d, date) and not isinstance(d, datetime) for d in dates):
+        err(f"{f} — `window.from` and `window.to` must be dates (YYYY-MM-DD)")
+    elif w["from"] > w["to"]:
+        err(f"{f} — `window.from` ({w['from']}) is after `window.to` ({w['to']})")
+
+
+def _check_file_fields(specs, err):
+    """Every field named for a local file Resource exists in its layer (offline;
+    tests/validation.md § 1, Data fields). The geometry column counts as a field."""
+    import pyogrio
+    for s in specs.values():
+        if s.type != "Indicator":
+            continue
+        for entry in s.meta.get("data") or []:
+            res = specs.get(entry.get("resource")) if isinstance(entry, dict) else None
+            path = str(res.meta.get("resource", "")) if res else ""
+            if not res or res.meta.get("datasets") is not None or path.startswith(("http://", "https://")):
+                continue
+            try:
+                info = pyogrio.read_info(ROOT / path)
+            except Exception as e:
+                err(f"{s.rel} — couldn't read {res.id}'s file {path}: {e}")
+                continue
+            have = set(info["fields"]) | {info.get("geometry_name") or ""}
+            for name in entry.get("fields") or {}:
+                if name not in have:
+                    err(f"{s.rel} — field {name} is not in {res.id}'s file ({path})")
 
 
 def _check_stable_edits(specs, warn):

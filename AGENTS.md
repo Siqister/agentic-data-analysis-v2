@@ -46,8 +46,8 @@ Ask which mode applies at the start of a session if it isn't clear.
 | **Resource** | One API, file, or dataset we're allowed to use, e.g. the Census Data API. It explains *how to access* the data. |
 | **Geography** | One boundary file we report on: city, neighborhoods, census tracts, or block groups. |
 | **Crosswalk** | How to move data from one geography to another, e.g. block groups → neighborhoods. |
-| **Indicator** | One measure, e.g. "% of households with housing cost burden." It names *exactly what data to pull* and how to compute with it. |
-| **Visualization** | One map. For now, a choropleth with tooltips. |
+| **Indicator** | One measure, e.g. "% of households with housing cost burden", or a reviewed selection of data, e.g. reported crime incidents in a time window (`measure: points`). It names *exactly what data to pull* and how to compute with it. |
+| **Visualization** | One map: a choropleth with tooltips, or a hexbin heat map of a selection. |
 | **Spec** | A Markdown file describing one of the five items above. Its file name is its ID. |
 | **OKF** | Open Knowledge Format, the minimal Markdown + YAML standard our specs follow. |
 | **Status** | `draft` (not yet approved) or `stable` (approved by the expert). |
