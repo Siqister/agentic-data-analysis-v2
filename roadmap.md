@@ -105,15 +105,129 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 ## Current chunk
 
-### Chunk 4b — Change in tract median household income, 2010 → 2024 (planned)
+### Chunk 4b — Change in tract median household income, 2010 → 2024
 
-**Status:** go-ahead given at 4a's Stop C (2026-10-25). Requirements are being written in chat; until then, the outline below is all there is.
+**Analysis question:** how has median household income changed at the census tract level between 2010 (ACS 2006–2010) and 2024 (ACS 2020–2024)? Percent change, in constant 2024 dollars.
 
-- `median_household_income_tract_pct_change_2010_2024` at `tract_2020`: `builds_on` `median_household_income_tract_2010` (reported at `tract_2020` through the matched crosswalk) and `median_household_income_tract_2024`. New `measure: change`; the change math in a `lib/` helper; first runner support for `builds_on`.
-- **Inflation:** R-CPI-U-RS (the index the Census Bureau uses for ACS), 2024 annual average ÷ 2010 annual average (320.4), written in the change Indicator's spec with its source. An expert-approved exception to AGENTS.md rule 3 (no Resource for one constant). Read the 2024 value from BLS's current file (BLS reissued the series with corrections in April 2026).
-- **Proof of concept:** no significance test. Caveats go in the manifest (a new manifest field), e.g. that MOEs are large and some changes may not be statistically significant.
-- Diverging color scheme with fixed breaks around 0.
-- Possibly CSV columns for the start and end values.
+**Brief:** the first Indicator that `builds_on` other Indicators, and the first diverging map.
+- A new `measure: percent_change` Indicator on 2020 tracts. It builds on the 2006–2010 tract median (moved to 2020 tracts by 4a's matched crosswalk) and the 2020–2024 tract median.
+- The 2010 values are adjusted to 2024 dollars with a factor written in the spec (decision 3).
+- A proof of concept: no significance test and no MOE for the change. Caveats are recorded in the change Indicator's manifests (decisions 2, 8, 11).
+- A choropleth with manual breaks around 0 and a diverging color scheme.
+
+**Branch:** `chunk/04b-tract-income-change`
+
+**Status:** ✅ Stop A passed 2026-10-25: requirements and design issues 1–7 approved; Stop A questions answered (decisions 7–12). Next: task 1, in Claude Code.
+
+**Exercises (capability checklist):**
+- New items to add: Indicator that builds on other Indicators; `percent_change` measure; manual classification with a diverging scheme; caveats in manifests.
+
+_Place and unit words in this section are requirements. They do not go into the Indicator body (chunk 2, design issue 5)._
+
+#### Requirements
+
+**Specs to draft** (all `status: draft`)
+
+| ID | Type | Settings |
+|---|---|---|
+| `median_household_income_tract_pct_change_2010_2024` | Indicator | `measure: percent_change`; `geography: tract_2020`; `builds_on: [median_household_income_tract_2010, median_household_income_tract_2024]` (start first, end second); no `data`, `crosswalks`, `reliability` or `unit`; `inflation` (design issue 3): index R-CPI-U-RS, 2010 and 2024 annual averages, source URL and retrieval date (task 2). |
+| `map_median_household_income_tract_pct_change_2010_2024__tract_2020` | Visualization | `indicator`: the change Indicator; `geography: tract_2020`; `classification: manual`; `classes: 8`; `breaks: [-15, -10, -5, 0, 5, 10, 15]`; `colors: RdBu`, red for decline to blue for increase (decision 9). `# Source note`: "Change is not tested for statistical significance." |
+
+Used unchanged: `median_household_income_tract_2010`, `median_household_income_tract_2024`, `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020`, `census_api`, `census_tract_relationship_2020_2010`, `cle_city`.
+
+**Computation** (Indicator body, without place names)
+1. `start` = the start Indicator's value at this geography; `end` = the end Indicator's value. Each comes with its MOE and note.
+2. Inflation factor = `inflation.to.value` ÷ `inflation.from.value`. `start` and its MOE are multiplied by it, so both values are in the end year's dollars.
+3. `estimate` = (`end` ÷ `start` − 1) × 100.
+4. `moe` is blank: the change has no MOE (decision 8). `cv` and `reliability` are blank too.
+5. If either value is blank, `estimate` and `moe` are blank, and `note` says which input is blank and why, e.g. "2006–2010: no matching 2010 tract".
+6. The table also has `start` (in the end year's dollars), `start_moe`, `end`, `end_moe` (design issue 5).
+
+**Caveats** (Indicator `# Caveats`, without place names; copied into its output manifests, design issue 6)
+- **Not tested for statistical significance, and no MOE.** Both medians have large MOEs (in `start_moe` and `end_moe`), so many changes may be within sampling error.
+- The 2010 values are adjusted with a national price index (R-CPI-U-RS), which doesn't reflect local prices.
+- A change in a unit's median isn't a change in any household's income: households move in and out, and who lives there changes.
+- Only units matched one to one between the two boundary vintages have a value. The match is by land area, not by where households are.
+- The 2006–2010 estimates were controlled to the population estimates of the time, not to the 2010 census counts. The 2020–2024 period includes 2020, when ACS data collection was disrupted.
+- Top- and bottom-coded inputs are blank, and the codes stand for different real incomes in each year.
+
+**Outputs** (each with its manifest)
+- `outputs/tables/median_household_income_tract_pct_change_2010_2024__tract_2020.csv`
+- `outputs/visualizations/map_median_household_income_tract_pct_change_2010_2024__tract_2020.html`
+
+**Expected size** (sanity check at Stop C, not a known-answer test)
+- 159 rows; **130 with a value** (both inputs present, from 4a's go/no-go).
+- The median ratio of 2020–2024 to 2006–2010 values, before adjustment, is about 1.38. With a factor of about 1.44, the median change is a few percent below 0. Before adjustment, the range runs from 0.61 to 3.18.
+
+**Tests**
+- **Spec validation** passes for the whole project, including the checks from design issues 1–3.
+- **`kat_005`**: the change Indicator at `tract_2020` for one tract, computed by hand from the two input tables and the factor; `tolerance: absolute 0.01` (percentage points). This isn't a trusted published value. It checks the joins and arithmetic, not the factor; an exception to validation.md § 2, which the expert accepts at Stop A.
+- `kat_001`–`kat_004` still pass.
+- **Invocation:**
+  - `inv_008` changes from `not_available` to `runs`. Prompt (unchanged): "How has median household income changed by census tract since 2010?" `spec: median_household_income_tract_pct_change_2010_2024`. The agent reports the table without describing or ranking places.
+  - `inv_009`, block groups aren't available. Prompt: "Map the change in median household income by block group since 2010." Expected: `not_available`.
+  - `inv_010`, other years aren't available. Prompt: "How has median household income changed by census tract between 2015 and 2024?" Expected: `not_available`. The agent must not change the years itself (architecture.md § 4.4 *Vintages and change over time*).
+  - Existing `inv_001`–`inv_007` still pass. Invocation tests run after approval (validation.md § 3).
+
+**Not in this chunk:** significance tests or flags; change in dollars; other pairs of years; block groups; change at the city level; a 2020–2024 tract map.
+
+#### Design issues
+
+Found by checking the requirements against architecture.md, AGENTS.md, validation.md, the templates and `lib/`. Proposed fixes:
+
+1. **`measure: percent_change`** (§ 4.4 `measure`, Indicator template, validation.md choices, `lib/validate.py`).
+   - Values are percent changes, signed. Displayed to 1 decimal place with a sign, e.g. "+12.3%".
+   - It has `builds_on` with exactly two Indicators (start, then end), no `crosswalks` (a percent change can't be moved), no `reliability` (a CV is meaningless for a change near 0), and no `unit`.
+2. **`builds_on` in the runner** (§§ 4.4, 7, 8; `lib/runner.py`, `lib/validate.py`).
+   - The runner runs each `builds_on` Indicator first, as a dependency (staleness as usual). A new `ctx.indicator(id)` returns that Indicator's table at this Indicator's `geography`, read from `outputs/tables/`.
+   - Validator: each `builds_on` Indicator is reported at this Indicator's `geography`. An Indicator needs `data`, `builds_on`, or both, so `data` is no longer always required.
+   - Manifest: `data` includes the inputs' snapshots (from their manifests), so a new snapshot below reruns this Indicator. A new `indicator_inputs` block records each input table's path and fingerprint, and the output is stale when one changes, like a Visualization's `indicator_output`.
+   - Source note: Resources and Geographies come from the `builds_on` Indicators' `data` when the Indicator has none.
+3. **`inflation` field** (§ 4.4, Indicator template, AGENTS.md rule 3, `lib/validate.py`).
+   - `inflation: { index, from: { year, value }, to: { year, value }, source, retrieved }`, with both values from the same table. Optional; only for a change Indicator whose inputs are in different years' dollars.
+   - AGENTS.md rule 3 gains one exception, from the expert: an inflation index value may be written in an Indicator's `inflation` field with its source, instead of coming from a Resource.
+4. **`lib/change.py`** (new, needs review; § 7 helper table): percent change from start and end values and a factor, carrying the inputs' MOEs into `start_moe` and `end_moe` (start's multiplied by the factor), with the blank and note rules in Computation steps 4–5. No MOE for the change (decision 8). Compiled code is a few lines (§ 4.4).
+5. **Start and end columns** (§ 12 *Output tables*, `lib/output.py`): `start`, `start_moe`, `end`, `end_moe`, for `percent_change` only, after `reliability` and before `note`. `start` is in the end year's dollars.
+6. **Caveats in manifests** (§ 8, `lib/output.py`, `lib/runner.py`): a `percent_change` Indicator's table manifest gets a `caveats` list, copied from its `# Caveats` bullets, and so does its map's manifest. Other Indicators keep their caveats in the spec only (decision 11). This is a `lib/` change, so all results rerun; existing CSVs, maps and manifests stay the same apart from `created` and `lib_hash`.
+7. **Choropleth for `percent_change`** (§ 4.5, `lib/choropleth.py`):
+   - Signed percent in the tooltip and the legend.
+   - Manual breaks with a diverging scheme. Manual classification is in the validator but has never been drawn.
+   - The tooltip also shows `start` and `end`, in dollars (decision 10).
+   - `reliability` is blank, so the tooltip leaves it out.
+
+Proposed: apply 1–7 after task 2, before drafting specs.
+
+#### Stop A questions
+
+Answered 2026-10-25. Recorded as decisions 7–12.
+
+#### Tasks
+
+1. Commit the chunk 4b plan (this roadmap) on `main`, then create `chunk/04b-tract-income-change` from `main`.
+2. **Look up the inflation factor** (network needed). Read the R-CPI-U-RS **2010 and 2024 annual averages from BLS's current all-items file** (<https://www.bls.gov/cpi/research-series/r-cpi-u-rs-home.htm>), both from the same file. 320.4 for 2010 came from an older PDF, and BLS reissued the series with corrections in April 2026. Record the values, the file and the retrieval date. 🛑 Stop and discuss if they can't be read.
+3. Apply design issues 1–7. Check that existing outputs are unchanged apart from `created` and `lib_hash` in manifests, and `kat_001`–`kat_004` pass.
+4. Draft both specs, update each folder's `index.md`, add `kat_005`, update `inv_008`, and add `inv_009` and `inv_010`. 🛑 **Stop B.**
+5. Build the `lib/` changes. Compile `pipeline/indicators/median_household_income_tract_pct_change_2010_2024.py`.
+6. Run validation and known-answer tests, and produce the outputs. Check the expected size. Tune the breaks with the expert by editing frontmatter. 🛑 **Stop C:** the expert reviews and approves; then the invocation tests run in fresh sessions.
+7. Retro per the working method. Remove *Change over time* from architecture.md § 13.
+
+#### Decisions (expert, 2026-10-25)
+
+Carried from chunk 4 planning and 4a:
+1. **Approach A** (architecture.md § 4.4 *Vintages and change over time*): the change Indicator `builds_on` the two vintage Indicators, the change math lives in `lib/`, and a new pair of years is a new spec.
+2. **Proof of concept:** results first; no significance test. Caveats go in the manifest.
+3. **Inflation factor** looked up and written into the change Indicator's spec, not a new Resource (an exception to AGENTS.md rule 3).
+4. **Diverging color scheme** for the change map.
+5. **Accepted caveats:** coded values that don't line up across years; 2006–2010 controls to population estimates, not census counts.
+6. **Tracts, `min_overlap` 0.80:** 4a's go/no-go gave 130 of 159 2020 tracts with both values; 4b goes ahead.
+
+Stop A (2026-10-25):
+7. **`measure: percent_change`**, not a generic `change` with a unit.
+8. **No MOE for the change:** `moe`, `cv` and `reliability` are blank. The inputs' MOEs stay in `start_moe` and `end_moe`.
+9. **Map classes:** manual breaks at −15, −10, −5, 0, +5, +10, +15 % (8 classes), `RdBu`, red for decline to blue for increase. Tunable at Stop C.
+10. **Tooltip** shows the start (in 2024 dollars) and end values as well as the change.
+11. **Caveats in manifests for the change Indicator only** (and its map).
+12. **`kat_005`** is computed by hand, an accepted exception to validation.md § 2.
 
 ---
 
@@ -247,10 +361,12 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | Wrote chunk 4a requirements into Current chunk: specs, matching rule, design issues 1–7, Stop A questions 1–5, tasks, go/no-go summary for 4b; 4b outlined. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4a requirements and design issues 1–7. Decisions 5–9: 2006–2010; Census relationship file, `min_overlap` 0.80; ask and name the available years when several vintages match; 2010 map included; `population_count` renamed. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (source checks). Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Task 1: plan committed on `main`, branch `chunk/04a-bg-2010-income` created. Task 2: 2010 cartographic block groups and the relationship file confirmed; the Census API has no block group data for vintage 2010 (block groups begin at 2013). Stopped, per task 2. | 🛑 Expert chooses the 2006–2010 data source (summary file, NHGIS, 2009–2013, or tracts). Then finish task 2 for that source. |
+| 2026-10-25 | Chat | Expert chose tracts after task 2 (decision 10). Rewrote chunks 4a and 4b for tracts: `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020` (`matched`, 0.80), `median_household_income_tract_2010` and `…_tract_2024`, 2010 tract map; design issue 8 (naming for a second Census unit); `kat_004`; `inv_006`–`inv_008` reworded. | 🛑 Stop A again (tract version, Stop A question 1). Then Claude Code: task 1b, task 2 for tracts. |
+| 2026-10-25 | Chat | ✅ Stop A passed for the tract version: expert approved chunk 4a (tracts) requirements and design issues 1–8. Decision 11: `<measure>_tract_<year>` naming. | Claude Code: task 1b (rename the branch to `chunk/04a-tract-2010-income`, commit), then task 2 for tracts. Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Task 1b: branch renamed `chunk/04a-tract-2010-income`, redraft committed. Task 2 (tracts): API serves 2010 and 2024 tracts; 2010 codes match 2024's; 2010 and 2020 cartographic tract files and the tract relationship file confirmed (*Task 2 findings* 5–9). | Task 3: design issues 1–8, rename first. |
 | 2026-10-25 | Claude Code | Task 3: rename done (outputs byte-identical, `kat_001`/`kat_002` pass; code needs re-verification); design issues 2–8 in docs. Task 4: specs, indexes, `kat_003`, `kat_004`, `inv_006`–`inv_008` drafted. Proposed `fields` on `matched` crosswalks. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–5. Then task 5 (`lib/`, compile). |
 | 2026-10-25 | Claude Code | Stop B passed (decision 12). Task 5: `lib/` for `matched`, `GEO_ID`, delimited files, validation; both tract Indicators compiled. Task 6: validation clean (also `--network`), `kat_001`–`kat_004` pass, existing outputs byte-identical, new tables and map written, go/no-go summary (130 of 159 2020 tracts have both values at 0.80). | 🛑 Stop C: expert reviews `lib/` and code, sets `min_overlap`, decides on 4b, runs `inv_001`–`inv_008`, approves. Then task 7 (retro). |
 | 2026-10-25 | Claude Code | Expert approved: 12 specs `stable`, 4 code files `verified`, `min_overlap` 0.80. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the 2010 map; `kat_001`–`kat_004` pass. | 🛑 Expert runs `inv_001`–`inv_008` in fresh sessions; decides on 4b. Then task 7 (retro). |
 | 2026-10-25 | Claude Code | Expert ran `inv_001`–`inv_008` in fresh sessions: all pass. 4b goes ahead. Task 7: retro recorded, checklist updated (URL file Resource, second vintage, tracts, 2010 boundaries, median aggregation, `matched`), validation.md (invocation tests after approval), `chunk/04a-tract-2010-income` merged into `main`. | Write 4b requirements in chat, into Current chunk. |
-| 2026-10-25 | Chat | Expert chose tracts after task 2 (decision 10). Rewrote chunks 4a and 4b for tracts: `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020` (`matched`, 0.80), `median_household_income_tract_2010` and `…_tract_2024`, 2010 tract map; design issue 8 (naming for a second Census unit); `kat_004`; `inv_006`–`inv_008` reworded. | 🛑 Stop A again (tract version, Stop A question 1). Then Claude Code: task 1b, task 2 for tracts. |
-| 2026-10-25 | Chat | ✅ Stop A passed for the tract version: expert approved chunk 4a (tracts) requirements and design issues 1–8. Decision 11: `<measure>_tract_<year>` naming. | Claude Code: task 1b (rename the branch to `chunk/04a-tract-2010-income`, commit), then task 2 for tracts. Stop B after specs are drafted. |
+| 2026-10-25 | Chat | Wrote chunk 4b requirements into Current chunk: change Indicator (`percent_change`, `builds_on`, `inflation`), diverging map, design issues 1–7, Stop A questions 1–6, `kat_005`, `inv_008`–`inv_010`. Fixed the order of two chat rows in this log. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
+| 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4b requirements and design issues 1–7. Decisions 7–12: `percent_change`; no MOE for the change; breaks ±5/10/15 % (8 classes, `RdBu`); start and end in the tooltip; manifest caveats for the change Indicator only; `kat_005` by hand. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (inflation factor). Stop B after specs are drafted. |
