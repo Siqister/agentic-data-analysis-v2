@@ -115,7 +115,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/04a-tract-2010-income` (renamed from `chunk/04a-bg-2010-income` in task 1b).
 
-**Status:** ✅ Stop A passed 2026-10-25 for the tract version: requirements and design issues 1–8 approved, Stop A question 1 answered (decision 11). Task 1 done. Next: task 1b, in Claude Code.
+**Status:** ✅ Stop A passed 2026-10-25 for the tract version: requirements and design issues 1–8 approved, Stop A question 1 answered (decision 11). Tasks 1, 1b and 2 done (tract checks all pass). Next: task 3.
 
 **Exercises (capability checklist):**
 - New items to add: tract Geography (`census_unit: tract`); file Resource fetched by URL (delimited text); a Geography on 2010 boundaries; `matched` crosswalk; a median moved through a crosswalk (`# Aggregation`).
@@ -246,6 +246,15 @@ Answered 2026-10-25. Block group version: decisions 5–9. Tract version: decisi
    - **Tracts, 2006–2010, from the API.** Changes the geography for 4a and 4b (decision 3 named tracts as a fallback).
 
 **Resolved:** the expert chose tracts (decision 10). Items 2–3 (block group files) are no longer used.
+
+**Tract checks (2026-10-25): all pass.**
+
+5. ✅ **Census API, tracts, vintages 2010 and 2024.** `for=tract:*&in=state:39&in=county:035` returns HTTP 200 for both; a county list (`county:035,093`) works too. Cuyahoga: 447 tracts (2010), 428 (2024). Same field codes in both vintages.
+   - **2010 annotation and coded values match 2024's.** Annotations seen: estimate `-666666666` with MOE `-222222222` (too few sample cases). Coded values: `2499` (bottom-coded) and `250001` (top-coded), each with MOE `-333333333`. In Cuyahoga 2010, 4 annotated and none coded. Coded values confirmed from Ohio, New York, California and New Jersey 2010 tracts. 2024 Cuyahoga: 13 annotated, 2 top-coded.
+6. ✅ **2010 cartographic tracts, Ohio.** `https://www2.census.gov/geo/tiger/GENZ2010/gz_2010_39_140_00_500k.zip`: 2,948 tracts, EPSG:4269. Fields `GEO_ID` (all `1400000US` + 11 digits; design issue 6 holds), `STATE`, `COUNTY`, `TRACT`, `NAME` (tract number, e.g. `1114.01`), `LSAD`, `CENSUSAREA`.
+7. ✅ **2020 cartographic tracts, Ohio.** `https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_39_tract_500k.zip`: 3,162 tracts, EPSG:4269. Fields include `GEOID` (11 digits), `NAME` (tract number), `NAMELSAD`, `ALAND`, `AWATER`.
+8. ✅ **Tract relationship file, Ohio.** `https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_st39.txt`: pipe-delimited, UTF-8 with BOM, 4,301 pairs (631 with a Cuyahoga 2020 tract). Fields used: `GEOID_TRACT_20`, `GEOID_TRACT_10`, `AREALAND_TRACT_20`, `AREALAND_TRACT_10`, `AREALAND_PART`. No blank GEOIDs.
+9. **Joins.** API tract GEOIDs (state + county + tract) match the boundary IDs, except tract `39035990000` (Lake Erie, water only, annotated in both vintages), which isn't in either cartographic file. The relationship file rows whose IDs aren't in the boundary files are water-only tracts (`…99xxxx`, land area 0) and one Ohio–Pennsylvania pair. **For `lib/`:** units with zero land area can't have an overlap share, so they never match (no division by zero).
 
 #### Decisions (expert, 2026-10-25)
 
@@ -386,5 +395,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | Wrote chunk 4a requirements into Current chunk: specs, matching rule, design issues 1–7, Stop A questions 1–5, tasks, go/no-go summary for 4b; 4b outlined. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4a requirements and design issues 1–7. Decisions 5–9: 2006–2010; Census relationship file, `min_overlap` 0.80; ask and name the available years when several vintages match; 2010 map included; `population_count` renamed. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (source checks). Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Task 1: plan committed on `main`, branch `chunk/04a-bg-2010-income` created. Task 2: 2010 cartographic block groups and the relationship file confirmed; the Census API has no block group data for vintage 2010 (block groups begin at 2013). Stopped, per task 2. | 🛑 Expert chooses the 2006–2010 data source (summary file, NHGIS, 2009–2013, or tracts). Then finish task 2 for that source. |
+| 2026-10-25 | Claude Code | Task 1b: branch renamed `chunk/04a-tract-2010-income`, redraft committed. Task 2 (tracts): API serves 2010 and 2024 tracts; 2010 codes match 2024's; 2010 and 2020 cartographic tract files and the tract relationship file confirmed (*Task 2 findings* 5–9). | Task 3: design issues 1–8, rename first. |
 | 2026-10-25 | Chat | Expert chose tracts after task 2 (decision 10). Rewrote chunks 4a and 4b for tracts: `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020` (`matched`, 0.80), `median_household_income_tract_2010` and `…_tract_2024`, 2010 tract map; design issue 8 (naming for a second Census unit); `kat_004`; `inv_006`–`inv_008` reworded. | 🛑 Stop A again (tract version, Stop A question 1). Then Claude Code: task 1b, task 2 for tracts. |
 | 2026-10-25 | Chat | ✅ Stop A passed for the tract version: expert approved chunk 4a (tracts) requirements and design issues 1–8. Decision 11: `<measure>_tract_<year>` naming. | Claude Code: task 1b (rename the branch to `chunk/04a-tract-2010-income`, commit), then task 2 for tracts. Stop B after specs are drafted. |
