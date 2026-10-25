@@ -52,14 +52,17 @@ def draw(spec_meta: dict, measure: str, unit: str, table: pd.DataFrame, geo: gpd
     if merged["estimate"].notna().sum() == 0:
         raise ValueError("no values to map")
     b = breaks(merged["estimate"], spec_meta["classification"], spec_meta["classes"], spec_meta.get("breaks"))
+    change = measure == "percent_change"
     keep = ["geography_id", "geography_name", "estimate", "moe", "reliability", "note", "geometry"]
+    if change:
+        keep[3:5] = ["start", "end"]   # no MOE or reliability for a change (§ 4.5)
     merged = merged[keep].replace({np.nan: None})
     config = {
         "title": spec_meta["title"],
         "colors": spec_meta["colors"],
         "classes": spec_meta["classes"],
         "breaks": b,
-        "format": "percent" if measure == "percent" else unit,
+        "format": "signed_percent" if change else "percent" if measure == "percent" else unit,
         "noValue": NO_VALUE,
     }
     page = TEMPLATE.format(
@@ -67,12 +70,22 @@ def draw(spec_meta: dict, measure: str, unit: str, table: pd.DataFrame, geo: gpd
         source=html.escape(source_note),
         d3=D3.read_text(),
         config=json.dumps(config),
+        # Only a percent_change map adds these, so other maps' pages are unchanged.
+        change_format=CHANGE_FORMAT if change else "",
+        change_lines=CHANGE_LINES if change else "",
         data=json.dumps(_geojson(gpd.GeoDataFrame(merged, geometry="geometry", crs=geo.crs))),
     )
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(page)
     return b
 
+
+CHANGE_FORMAT = """
+  : config.format === "signed_percent" ? (v => d3.format("+.1f")(v) + "%")"""
+CHANGE_LINES = """const dollars = v => v == null ? "no value" : d3.format("$,.0f")(v);
+    lines.splice(1, 3, "Change: " + (p.estimate == null ? "no value" : fmt(p.estimate)),
+      "Start, in end-year dollars: " + dollars(p.start), "End: " + dollars(p.end));
+    """
 
 TEMPLATE = """<!doctype html>
 <html lang="en">
@@ -107,7 +120,7 @@ const data = {data};
 const scheme = d3["scheme" + config.colors];
 if (!scheme || !scheme[config.classes]) throw new Error("unknown color scheme " + config.colors);
 const color = d3.scaleThreshold().domain(config.breaks).range(scheme[config.classes]);
-const fmt = config.format === "percent" ? (v => d3.format(".1f")(v) + "%")
+const fmt = config.format === "percent" ? (v => d3.format(".1f")(v) + "%"){change_format}
   : config.format === "dollars" ? d3.format("$,.0f") : d3.format(",.0f");
 const fill = v => v == null ? config.noValue : color(v);
 
@@ -126,7 +139,7 @@ svg.selectAll("path").data(data.features).join("path")
       "Margin of error: " + (p.moe == null ? "—" : "±" + fmt(p.moe)),
       "Reliability: " + (p.reliability || "—"),
     ];
-    if (p.note) lines.push("Note: " + p.note);
+    {change_lines}if (p.note) lines.push("Note: " + p.note);
     tip.html(lines.join("<br>")).style("display", "block")
       .style("left", Math.min(event.clientX + 12, window.innerWidth - 220) + "px")
       .style("top", (event.clientY + 12) + "px");

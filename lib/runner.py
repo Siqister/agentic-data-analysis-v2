@@ -94,6 +94,13 @@ class Context:
         """True for points inside the Indicator's geography or on its boundary."""
         return points.inside(t.geometry, self.geography(self.spec.meta["geography"]))
 
+    def indicator(self, ind_id: str) -> pd.DataFrame:
+        """A `builds_on` Indicator's table at this Indicator's geography, read from outputs/tables/
+        (the runner has already run it)."""
+        if ind_id not in (self.spec.meta.get("builds_on") or []):
+            raise Stop(f"{self.spec.id}: {ind_id} is not in its builds_on")
+        return output.read_table(indicator_outputs(self.specs[ind_id], self.specs)[self.spec.meta["geography"]])
+
     def stop(self, message: str):
         """Stop the run from compiled code, e.g. for a value the spec doesn't cover."""
         raise Stop(f"{self.spec.id}: {message}")
@@ -167,9 +174,15 @@ def indicator_outputs(ind: Spec, specs: dict[str, Spec]) -> dict:
 
 
 def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> None:
+    inputs = {}
+    for dep in ind.meta.get("builds_on") or []:
+        # Inputs run first, as dependencies; their tables are read, never recomputed here.
+        run_indicator(specs[dep], specs)
+        path = indicator_outputs(specs[dep], specs)[ind.meta["geography"]]
+        inputs[dep] = yaml.safe_load(output.manifest_path(path).read_text())
     bf = built_from(ind, specs)
     outputs = indicator_outputs(ind, specs)
-    reasons = {g: output.stale_reason(p, bf) for g, p in outputs.items()}
+    reasons = {g: output.stale_reason(p, bf) or _inputs_changed(p, inputs) for g, p in outputs.items()}
     if not force and not any(reasons.values()):
         print(f"{ind.id}: up to date")
         return
@@ -196,10 +209,16 @@ def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> Non
     if any(r["status"] != "pass" for r in results.values()):
         raise Stop(f"{ind.id}: a known-answer test failed; outputs not delivered. The expert decides: fix, or accept the difference.")
 
-    data = _dedupe([s.record() for s in ctx.snaps])
+    data = _dedupe([d for m in inputs.values() for d in m["data"]] + [s.record() for s in ctx.snaps])
     tests = {k: v["status"] for k, v in results.items()}
     for g, path in outputs.items():
-        output.write_table(tables[g], path, bf, data, tests)
+        m = output.write_table(tables[g], path, bf, data, tests)
+        if inputs:
+            m["indicator_inputs"] = [{"path": v["output"], "fingerprint": v["fingerprint"]} for v in inputs.values()]
+        if ind.meta["measure"] == "percent_change":
+            m["caveats"] = caveats(ind)
+        if inputs or "caveats" in m:
+            output.manifest_path(path).write_text(yaml.safe_dump(m, sort_keys=False, allow_unicode=True))
         print(f"  wrote {path.relative_to(ROOT)}")
 
 
@@ -281,6 +300,8 @@ def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) ->
     m = output.write_manifest(out, bf, data, ind_manifest["known_answer_tests"])
     m["indicator_output"] = {"path": ind_manifest["output"], "fingerprint": ind_manifest["fingerprint"]}
     m["classes"] = {"classification": viz.meta["classification"], **classes}
+    if ind_manifest.get("caveats"):
+        m["caveats"] = ind_manifest["caveats"]
     output.manifest_path(out).write_text(yaml.safe_dump(m, sort_keys=False, allow_unicode=True))
     print(f"  wrote {out.relative_to(ROOT)}")
 
@@ -289,7 +310,7 @@ def source_note(ind: Spec, specs: dict[str, Spec], data: list[dict], viz: Spec |
     """Data sources from the Resource and Geography titles, the MOE sentence only when some data
     is from the Census, then the Visualization's own `# Source note` text, if any."""
     parts, census_data = [], False
-    for entry in ind.meta.get("data") or []:
+    for entry in _data_entries(ind, specs):
         res = specs[entry["resource"]]
         fields = ", ".join(entry["fields"])
         if entry.get("dataset"):
@@ -308,6 +329,38 @@ def source_note(ind: Spec, specs: dict[str, Spec], data: list[dict], viz: Spec |
     if extra and extra != "None.":
         note += " " + extra
     return note
+
+
+def _data_entries(ind: Spec, specs: dict[str, Spec]) -> list[dict]:
+    """The Indicator's `data`, or with none, its `builds_on` Indicators' (architecture.md § 4.5)."""
+    if ind.meta.get("data"):
+        return list(ind.meta["data"])
+    return [e for dep in ind.meta.get("builds_on") or [] for e in _data_entries(specs[dep], specs)]
+
+
+def caveats(ind: Spec) -> list[str]:
+    """The bullets under the Indicator's `# Caveats`, copied (architecture.md § 8)."""
+    out, inside = [], False
+    for line in ind.body.splitlines():
+        if line.startswith("# "):
+            inside = line[2:].strip() == "Caveats"
+        elif inside and line.startswith("- "):
+            out.append(line[2:].strip())
+        elif inside and line.startswith("  ") and out:
+            out[-1] += " " + line.strip()
+    return out
+
+
+def _inputs_changed(path, inputs: dict) -> str | None:
+    """An input table was rewritten since this output was built (like a map's indicator_output)."""
+    mp = output.manifest_path(path)
+    if not inputs or not mp.exists():
+        return None
+    recorded = {i["path"]: i["fingerprint"] for i in yaml.safe_load(mp.read_text()).get("indicator_inputs") or []}
+    for dep, m in inputs.items():
+        if recorded.get(m["output"]) != m["fingerprint"]:
+            return f"{dep} results changed"
+    return None
 
 
 def _section(body: str, heading: str) -> str:

@@ -117,7 +117,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/04b-tract-income-change`
 
-**Status:** ✅ Stop A passed 2026-10-25. Tasks 1–4 done. 🛑 **Stop B:** the expert reviews the drafted specs and *Stop B notes*.
+**Status:** ✅ Stop A passed 2026-10-25. ✅ Stop B passed 2026-10-25 (decision 13). Tasks 5–6 done. 🛑 **Stop C:** the expert reviews `lib/` and code (*Stop C notes*), tunes the breaks if needed, and approves; then the invocation tests run in fresh sessions.
 
 **Exercises (capability checklist):**
 - New items to add: Indicator that builds on other Indicators; `percent_change` measure; manual classification with a diverging scheme; caveats in manifests.
@@ -211,6 +211,30 @@ Answered 2026-10-25. Recorded as decisions 7–12.
 6. Run validation and known-answer tests, and produce the outputs. Check the expected size. Tune the breaks with the expert by editing frontmatter. 🛑 **Stop C:** the expert reviews and approves; then the invocation tests run in fresh sessions.
 7. Retro per the working method. Remove *Change over time* from architecture.md § 13.
 
+#### Stop C notes (2026-10-25)
+
+**`lib/` changes (design issues 1–7; need the expert's review):**
+- `change.py` (new): `inflation_factor`, `period` (from an input's ACS 5-year vintage), `percent_change` (start × factor; (end ÷ start − 1) × 100; `moe` blank; `start`, `start_moe`, `end`, `end_moe`; notes for blank inputs, start first; a start of 0 also gives a blank, which can't happen for a published median).
+- `runner`: runs `builds_on` Indicators first; `ctx.indicator(id)` reads an input's table at this geography; the manifest's `data` adds the inputs' snapshots, and a new `indicator_inputs` block (path, fingerprint) makes the output stale when an input's table changes; `caveats` (the `# Caveats` bullets) in a `percent_change` table manifest and its map's manifest; the source note uses the inputs' `data` when an Indicator has none.
+- `output`: `start`, `start_moe`, `end`, `end_moe` columns after `reliability`, when present.
+- `choropleth`: for `percent_change`, signed percents ("+12.3%") in tooltip and legend; tooltip shows change, start (in end-year dollars) and end, without MOE and reliability. The change-only JavaScript is added through two placeholders that are empty for every other map, so other maps' pages are byte-identical.
+- `validate`: `percent_change` allowed; `data` or `builds_on` required; each `builds_on` Indicator reported at this geography; `percent_change` has two `builds_on` and no `data`, `crosswalks`, `reliability` or `unit`; only `percent_change` has `inflation`, with its fields checked.
+
+**Compiled code (unreviewed):** `pipeline/indicators/median_household_income_tract_pct_change_2010_2024.py`, a few lines calling `lib/change.py`.
+
+**Results:**
+- Validation: 0 errors; warnings only for the draft specs and unreviewed code.
+- Known-answer tests: `kat_001`–`kat_005` pass (`kat_005`: −17.0197 vs −17.02, tolerance 0.01).
+- Existing outputs: all ten tables and maps byte-identical to chunk 4a's, and their manifests identical apart from `created`, `lib_hash` and `fingerprint`. (The agent reran the tract tables before saving the 4a copies, so it rebuilt the 4a state in a temporary worktree of `main` from the same snapshots to compare against.)
+- Expected size: 159 rows, **130 with a value**. Ratio before adjustment: median 1.377, range 0.61 to 3.18 (as planned). Change: median −4.8%, range −57.9% to +119.9%.
+- Blank values: 21 "2006–2010: no matching 2010 tract"; 4 with a blank 2020–2024 input; 2 with no match and a blank 2020–2024 input; 2 with both inputs annotated.
+- Staleness: a rerun reports everything up to date.
+
+**For the expert:**
+1. **Breaks:** tracts per class, from below −15% to +15% and over: 38, 16, 10, 8, 5, 5, 10, 38. Tune `breaks` in the map's frontmatter if wanted (no recompile).
+2. **Source note** still ends with "Margins of error at 90% confidence." (added for any Census data), though the change has no MOE; the inputs' MOEs are in the table. Keep, or drop it for `percent_change`? (Dropping is a small `lib/` change.)
+3. **Tooltip label** "Start, in end-year dollars" is generic (the simpler option); a label like "2006–2010, in 2024 dollars" needs the periods passed to the map.
+
 #### Stop B notes (2026-10-25)
 
 **Task 3 (docs only; `lib/` is task 5, after Stop B, as in 4a):** design issues 1–7 written into AGENTS.md rule 3 (the `inflation` exception), architecture.md §§ 4 (fields), 4.4 (`percent_change`, `builds_on`, `data` optional, change Indicators and `inflation` under *Vintages and change over time*), 4.5 (source note and tooltip for `percent_change`), 7 (Change helper, runner), 8 (`indicator_inputs`, `caveats`), 12 (start/end columns, signed display); the Indicator template; validation.md (three new Indicator checks). The check that existing outputs are unchanged moves to task 5, when `lib/` changes.
@@ -249,6 +273,9 @@ Stop A (2026-10-25):
 10. **Tooltip** shows the start (in 2024 dollars) and end values as well as the change.
 11. **Caveats in manifests for the change Indicator only** (and its map).
 12. **`kat_005`** is computed by hand, an accepted exception to validation.md § 2.
+
+Stop B (2026-10-25):
+13. **Specs approved for compiling**, Stop B questions 1–4 as proposed: 2024 index value 462.511; the period in blank-input notes comes from each input's ACS 5-year vintage (both inputs blank: both notes, start first, joined by "; "); `inv_009` as drafted; "(%)" in the Indicator title. Expert's standing rule: **when in doubt, take the simpler option** (and note it at the next stop).
 
 ---
 
@@ -391,5 +418,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | Expert ran `inv_001`–`inv_008` in fresh sessions: all pass. 4b goes ahead. Task 7: retro recorded, checklist updated (URL file Resource, second vintage, tracts, 2010 boundaries, median aggregation, `matched`), validation.md (invocation tests after approval), `chunk/04a-tract-2010-income` merged into `main`. | Write 4b requirements in chat, into Current chunk. |
 | 2026-10-25 | Claude Code | 4b task 1: plan committed on `main`, branch `chunk/04b-tract-income-change`. Task 2: R-CPI-U-RS from BLS's current file: 2010 = 319.8 (not 320.4), 2024 = 462.511; factor 1.44625. | Task 3: design issues 1–7. |
 | 2026-10-25 | Claude Code | 4b task 3: design issues 1–7 in docs. Task 4: change Indicator and map drafted, `kat_005` (−17.02%), `inv_008` → `runs`, `inv_009`, `inv_010`. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–4. Then task 5. |
+| 2026-10-25 | Claude Code | Stop B passed (decision 13). Task 5: `lib/change.py`, `builds_on` in the runner, start/end columns, caveats in manifests, `percent_change` choropleth, validator; change Indicator compiled. Task 6: validation clean, `kat_001`–`kat_005` pass, existing outputs byte-identical, expected size matches (130 of 159). | 🛑 Stop C: expert reviews `lib/` and code, breaks, questions 1–3; approves. Then invocation tests in fresh sessions. |
 | 2026-10-25 | Chat | Wrote chunk 4b requirements into Current chunk: change Indicator (`percent_change`, `builds_on`, `inflation`), diverging map, design issues 1–7, Stop A questions 1–6, `kat_005`, `inv_008`–`inv_010`. Fixed the order of two chat rows in this log. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4b requirements and design issues 1–7. Decisions 7–12: `percent_change`; no MOE for the change; breaks ±5/10/15 % (8 classes, `RdBu`); start and end in the tooltip; manifest caveats for the change Indicator only; `kat_005` by hand. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (inflation factor). Stop B after specs are drafted. |

@@ -24,14 +24,14 @@ REQUIRED = {
     "Resource": ["resource"],
     "Geography": ["resource", "id_field"],
     "Crosswalk": ["from", "to", "method"],
-    "Indicator": ["measure", "geography", "data"],
+    "Indicator": ["measure", "geography"],
     "Visualization": ["indicator", "geography", "classification", "classes", "colors"],
 }
 CHOICES = {
     "status": {"draft", "stable", "deprecated"},
     "method": {"population_weighted", "areal", "centroid", "nested", "matched"},
     "weights": {"total_population", "households", "housing_units"},
-    "measure": {"percent", "rate", "count", "median", "index", "points"},
+    "measure": {"percent", "rate", "count", "median", "index", "points", "percent_change"},
     "unit": {"count", "dollars"},
     "within_rule": {"majority_area", "centroid", "any"},
     "census_unit": {"block group", "tract"},
@@ -129,6 +129,22 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
                 geo = specs.get(m.get("geography"))
                 if _is_census(res) and geo and not geo.meta.get("census_unit"):
                     err(f"{f} — uses Census data, but its geography {geo.id} has no `census_unit`")
+            if not m.get("data") and not m.get("builds_on"):
+                err(f"{f} — an Indicator needs `data`, `builds_on`, or both")
+            for dep in m.get("builds_on") or []:
+                d = specs.get(dep)
+                if d and d.type == "Indicator" and m.get("geography") not in _reported_at(d, specs):
+                    err(f"{f} — builds on {dep}, which is not reported at {m.get('geography')}")
+            if m.get("measure") == "percent_change":
+                if len(m.get("builds_on") or []) != 2:
+                    err(f"{f} — a percent_change Indicator builds on exactly two Indicators (start, then end)")
+                for k in ("data", "crosswalks", "reliability", "unit"):
+                    if m.get(k):
+                        err(f"{f} — a percent_change Indicator has no `{k}`")
+            elif "inflation" in m:
+                err(f"{f} — only a percent_change Indicator has `inflation`")
+            if "inflation" in m:
+                _check_inflation(f, m["inflation"], err)
             if m.get("measure") in ("median", "index") and m.get("crosswalks") and "Aggregation" not in s.sections():
                 err(f"{f} — a {m['measure']} with crosswalks needs an `# Aggregation` section")
             if m.get("measure") == "points":
@@ -184,6 +200,25 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
     if network:
         _check_fields(specs, r)
     return r
+
+
+def _reported_at(ind, specs) -> list:
+    return [ind.meta.get("geography")] + [specs[c].meta.get("to") for c in ind.meta.get("crosswalks") or [] if c in specs]
+
+
+def _check_inflation(f, inf, err):
+    """`inflation: { index, from: { year, value }, to: { year, value }, source, retrieved }`."""
+    if not isinstance(inf, dict) or any(not inf.get(k) for k in ("index", "from", "to", "source", "retrieved")):
+        err(f"{f} — `inflation` needs `index`, `from`, `to`, `source` and `retrieved`")
+        return
+    if not isinstance(inf["retrieved"], date):
+        err(f"{f} — `inflation.retrieved` must be a date (YYYY-MM-DD)")
+    ends = [inf["from"], inf["to"]]
+    if not all(isinstance(e, dict) and isinstance(e.get("year"), int) and isinstance(e.get("value"), (int, float))
+               and not isinstance(e.get("value"), bool) and e["value"] > 0 for e in ends):
+        err(f"{f} — `inflation.from` and `inflation.to` each need a `year` and a positive `value`")
+    elif inf["from"]["year"] >= inf["to"]["year"]:
+        err(f"{f} — `inflation.from.year` must be before `inflation.to.year`")
 
 
 def _check_matched(f, m, frm, specs, err):
