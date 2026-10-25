@@ -27,7 +27,8 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] Every ID in a reference field ([architecture.md § 5](../architecture.md#5-the-dependency-graph)) exists and has the right type.
 - [ ] The graph has no loops.
 - [ ] **Geography:** `within` and `within_rule` are both present or both missing.
-- [ ] **Crosswalk:** `population_weighted` has `weights` and `weights_source`; other methods have neither.
+- [ ] **Crosswalk:** `population_weighted` has `weights` and `weights_source`. `matched` has `weights_source`, `min_overlap` (above 0.5, at most 1) and `fields` (`from_id`, `to_id`, `from_area`, `to_area`, `shared_area`), and no `weights`. Other methods have none of these.
+- [ ] **Crosswalk:** `matched` has a `from` Geography with a `census_unit`, and a `weights_source` that is a file Resource (no `datasets`).
 - [ ] **Crosswalk:** `nested` with a `from` Geography that has `within` requires that `within` equals `to`. (Other `nested` crosswalks are checked when they're built: every unit must fall in exactly one target.)
 - [ ] **Indicator:** every listed crosswalk's `from` equals the Indicator's `geography`.
 - [ ] **Indicator:** with Census data, its `geography` has a `census_unit`.
@@ -44,11 +45,12 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 **File Resources** (always; no network needed):
 
 - [ ] Every field in an Indicator's `data` entry for a local file Resource exists in the file's layer (the geometry column counts as a field). A missing file is an error.
+- [ ] Every column in a `matched` Crosswalk's `fields` exists in its `weights_source` file. For a file at a URL, this reads the snapshot; with no snapshot yet, it's a warning (it's checked when the crosswalk is built).
 
 **Census** (author mode; needs network access, `--network`):
 
 - [ ] Every field code in an Indicator's `data` exists in the source's own field list for that dataset and vintage (for Census, `variables.json`). Its official label is shown next to the spec's plain meaning so the expert can confirm they match.
-- [ ] Every field is published at the Indicator's geography's `census_unit`: a sample request (one tract's units) doesn't return `null` for every unit.
+- [ ] Every field is published at the Indicator's geography's `census_unit`: a sample request (one tract's block groups, or one county's tracts) doesn't return `null` for every unit.
 
 ### Code and status
 
@@ -146,4 +148,4 @@ The heading gives the test ID (`inv_001`, `inv_002`, …).
 
 ### When they run
 
-In author mode, when the runner, the agent's instructions, or the set of specs changes, and at least once per chunk. Each test starts from the **plain prompt, in a fresh agent session**: calling `lib.runner` directly tests the runner, not the agent. The expert (or a check of the working tree) confirms the behavior. A failure is a bug in the agent's instructions or the runner, not in an Indicator.
+In author mode, when the runner, the agent's instructions, or the set of specs changes, and at least once per chunk, **after the expert's approval**: the agent runs in run mode by default, so a `runs` test can only pass once its spec is `stable` and its code reviewed (chunk 4a). Each test starts from the **plain prompt, in a fresh agent session**: calling `lib.runner` directly tests the runner, not the agent. The expert (or a check of the working tree) confirms the behavior. A failure is a bug in the agent's instructions or the runner, not in an Indicator.

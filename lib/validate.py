@@ -29,7 +29,7 @@ REQUIRED = {
 }
 CHOICES = {
     "status": {"draft", "stable", "deprecated"},
-    "method": {"population_weighted", "areal", "centroid", "nested"},
+    "method": {"population_weighted", "areal", "centroid", "nested", "matched"},
     "weights": {"total_population", "households", "housing_units"},
     "measure": {"percent", "rate", "count", "median", "index", "points"},
     "unit": {"count", "dollars"},
@@ -98,13 +98,17 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
         if s.type == "Geography" and bool(m.get("within")) != bool(m.get("within_rule")):
             err(f"{f} — `within` and `within_rule` must both be present or both missing")
         if s.type == "Crosswalk":
-            pw = m.get("method") == "population_weighted"
-            has = [k for k in ("weights", "weights_source") if m.get(k)]
-            if pw and len(has) < 2:
-                err(f"{f} — population_weighted needs both `weights` and `weights_source`")
-            if not pw and has:
-                err(f"{f} — `{'`, `'.join(has)}` only apply to population_weighted; remove them")
+            method = m.get("method")
+            allowed = {"population_weighted": {"weights", "weights_source"},
+                       "matched": {"weights_source", "min_overlap", "fields"}}.get(method, set())
+            has = {k for k in ("weights", "weights_source", "min_overlap", "fields") if m.get(k) is not None}
+            if allowed - has:
+                err(f"{f} — {method} needs `{'`, `'.join(sorted(allowed))}`")
+            if has - allowed:
+                err(f"{f} — `{'`, `'.join(sorted(has - allowed))}` don't apply to {method}; remove them")
             frm = specs.get(m.get("from"))
+            if method == "matched":
+                _check_matched(f, m, frm, specs, err)
             if m.get("method") == "nested" and frm and frm.meta.get("within") and frm.meta["within"] != m.get("to"):
                 err(f"{f} — nested from {frm.id}, which is limited to {frm.meta['within']}, so `to` must be {frm.meta['within']}")
         if s.type == "Indicator":
@@ -176,9 +180,27 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
     _check_code(specs, err, warn)
     _check_tests(specs, err)
     _check_file_fields(specs, err)
+    _check_matched_fields(specs, err, warn)
     if network:
         _check_fields(specs, r)
     return r
+
+
+def _check_matched(f, m, frm, specs, err):
+    """`matched` (architecture.md § 4.3): min_overlap in (0.5, 1], the five `fields`,
+    a `from` with a census_unit, and a file Resource as `weights_source`."""
+    from lib.crosswalk import MATCHED_FIELDS
+    mo = m.get("min_overlap")
+    if mo is not None and (not isinstance(mo, (int, float)) or isinstance(mo, bool) or not 0.5 < mo <= 1):
+        err(f"{f} — `min_overlap` must be above 0.5 and at most 1")
+    flds = m.get("fields")
+    if flds is not None and (not isinstance(flds, dict) or set(flds) != set(MATCHED_FIELDS)):
+        err(f"{f} — `fields` needs exactly {', '.join(MATCHED_FIELDS)}")
+    if frm and not frm.meta.get("census_unit"):
+        err(f"{f} — matched from {frm.id}, which has no `census_unit`")
+    src = specs.get(m.get("weights_source"))
+    if src and src.type == "Resource" and src.meta.get("datasets") is not None:
+        err(f"{f} — `weights_source` {src.id} must be a file Resource (no `datasets`)")
 
 
 def _check_window(f, m, err):
@@ -218,6 +240,31 @@ def _check_file_fields(specs, err):
             for name in entry.get("fields") or {}:
                 if name not in have:
                     err(f"{s.rel} — field {name} is not in {res.id}'s file ({path})")
+
+
+def _check_matched_fields(specs, err, warn):
+    """Every column a `matched` Crosswalk names exists in its weights_source file (offline).
+    A file at a URL is read from its snapshot; with none yet, a warning."""
+    from lib.crosswalk import read_delimited
+    from lib.snapshot import RAW, _read, request_hash
+    for s in specs.values():
+        res = specs.get(s.meta.get("weights_source")) if s.type == "Crosswalk" else None
+        flds = s.meta.get("fields")
+        if s.meta.get("method") != "matched" or not res or not isinstance(flds, dict):
+            continue
+        url = str(res.meta.get("resource", ""))
+        if url.startswith(("http://", "https://")):
+            snap = _read(RAW / res.id / request_hash({"url": url}), res.id)
+            if snap is None:
+                warn(f"{s.rel} — {res.id} isn't snapshotted yet, so its columns are checked when the crosswalk is built")
+                continue
+            path = snap.path
+        else:
+            path = ROOT / url
+        try:
+            read_delimited(path, list(flds.values())).head(0)
+        except Exception as e:
+            err(f"{s.rel} — {e}")
 
 
 def _check_stable_edits(specs, warn):

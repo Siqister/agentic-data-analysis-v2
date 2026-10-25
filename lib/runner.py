@@ -12,6 +12,7 @@ outputs with manifests.
 import argparse
 import dataclasses
 import importlib.util
+import re
 import sys
 
 import yaml
@@ -104,7 +105,7 @@ class Context:
 
     def crosswalk(self, cw_id: str):
         cw = self.specs[cw_id]
-        return crosswalk.build(cw, self.geography(cw.meta["from"]), self.geography(cw.meta["to"]), self.specs)
+        return crosswalk.build(cw, self.geography(cw.meta["from"]), self.geography(cw.meta["to"]), self.specs, self.snaps)
 
 
 def available(specs: dict[str, Spec]) -> str:
@@ -131,7 +132,7 @@ def built_from(spec: Spec, specs: dict[str, Spec]) -> list[dict]:
             entry["verified"] = header.verified if header else None
         else:
             entry["spec_hash"] = s.meta_hash   # frontmatter only: body edits don't rerun
-        for k in ("method", "within", "within_rule", "census_unit"):
+        for k in ("method", "min_overlap", "within", "within_rule", "census_unit"):
             if k in s.meta:
                 entry[k] = s.meta[k]
         out.append(entry)
@@ -215,9 +216,14 @@ def report(ind: Spec, specs: dict[str, Spec], ctx: Context, native: pd.DataFrame
     label = specs[geo].meta.get("census_unit", "unit")
     for cw_id in ind.meta.get("crosswalks") or []:
         to = specs[cw_id].meta["to"]
-        if ind.meta["measure"] != "count":
+        if specs[cw_id].meta["method"] == "matched":
+            # Copies values unchanged, so any measure can use it (architecture.md § 4.3).
+            moved = crosswalk.apply_matched(native, ctx.crosswalk(cw_id), ctx.geography(to)["geography_id"],
+                                            label=_matched_label(specs[geo]))
+        elif ind.meta["measure"] != "count":
             raise Stop(f"{ind.id}: moving a {ind.meta['measure']} through a crosswalk isn't built yet")
-        moved = crosswalk.apply_count(native, ctx.crosswalk(cw_id), label=label)
+        else:
+            moved = crosswalk.apply_count(native, ctx.crosswalk(cw_id), label=label)
         tables[to] = moved.merge(ctx.geography(to)[["geography_id", "geography_name"]], on="geography_id")
     rel = ind.meta.get("reliability")
     for g, t in tables.items():
@@ -226,6 +232,14 @@ def report(ind: Spec, specs: dict[str, Spec], ctx: Context, native: pd.DataFrame
         tables[g] = (moe.reliability(t, rel["cv_threshold"], rel["low"]) if rel
                      else t.assign(cv=float("nan"), reliability=""))
     return tables
+
+
+def _matched_label(geo: Spec) -> str:
+    """E.g. "2010 tract": the boundary year at the end of the Geography's ID (§ 12) and its census_unit."""
+    year = re.search(r"_(\d{4})$", geo.id)
+    if not year or not geo.meta.get("census_unit"):
+        raise Stop(f"{geo.id}: a matched crosswalk's `from` needs a census_unit and a boundary year in its ID")
+    return f"{year.group(1)} {geo.meta['census_unit']}"
 
 
 def selection(ind: Spec, result) -> tuple[gpd.GeoDataFrame, dict]:

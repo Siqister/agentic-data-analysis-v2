@@ -9,11 +9,14 @@ tags: [census]
 auth: CENSUS_API_KEY
 datasets:
   - { dataset: acs/acs5, vintage: 2024 }
+  - { dataset: acs/acs5, vintage: 2010 }
 ---
 
 # About
 
 Published by the U.S. Census Bureau. Serves ACS and decennial census tables as JSON. Public domain. The ACS 5-year release is updated once a year; vintage 2024 is the 2020–2024 5-year estimate, published on 2020 census geography.
+
+Vintage 2010 is the 2006–2010 5-year estimate, published on 2010 census geography. The API serves it down to **tracts only**: for 5-year vintages before 2013, `geography.json` has no `block group` level, and a block group request returns HTTP 400 "unknown/unsupported geography hierarchy". Dollar values are in 2010 inflation-adjusted dollars.
 
 # Access
 
@@ -34,4 +37,5 @@ Published by the U.S. Census Bureau. Serves ACS and decennial census tables as J
 
 - **Annotation values.** Negative codes such as `-666666666`, `-555555555`, `-333333333` and `-222222222` are annotations, not numbers. They must never enter a calculation as values. If the estimate is an annotation, `estimate` and `moe` are blank. If only the MOE is an annotation, the estimate is kept and `moe` is blank. Either way, the annotation goes in `note`. See the Census Bureau's [ACS notes on estimate and MOE annotations](https://www.census.gov/data/developers/data-sets/acs-1year/notes-on-acs-estimate-and-annotation-values.html).
 - **B01003 (Total population).** At block group level, the estimate has a sampling MOE.
-- **B19013 (Median household income).** Published at block group level. Medians outside the open-ended income range are coded, not measured: the API returns `2499` for "under $2,500" (bottom-coded) and `250001` for "$250,000 or more" (top-coded), each with MOE `-333333333`. These are placeholders, not values. Indicators blank them with a note: "bottom-coded: under $2,500" or "top-coded: $250,000 or more".
+- **B19013 (Median household income).** Published at block group and tract level (vintage 2010: tract level only). Medians outside the open-ended income range are coded, not measured: the API returns `2499` for "under $2,500" (bottom-coded) and `250001` for "$250,000 or more" (top-coded), each with MOE `-333333333`. These are placeholders, not values. Indicators blank them with a note: "bottom-coded: under $2,500" or "top-coded: $250,000 or more". Vintage 2010 uses the same codes and annotations (checked against 2010 tracts in Ohio, New York, California and New Jersey, 2026-10-25); its dollar amounts are in 2010 dollars, so the top and bottom codes don't stand for the same real income as 2024's.
+- **Water-only tracts** (tract codes `99xxxx`, e.g. Lake Erie) have rows in the API, with annotated values, but aren't in the cartographic boundary files.

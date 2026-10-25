@@ -4,7 +4,7 @@ title: Median household income by block group, 2020–2024
 description: Choropleth of median household income by 2020 census block group in Cleveland.
 status: stable
 
-indicator: median_household_income
+indicator: median_household_income_2024
 geography: bg_2020
 classification: quantile
 classes: 5

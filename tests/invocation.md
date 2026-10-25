@@ -17,20 +17,20 @@ No Indicator or Visualization covers median gross rent. The agent says it isn't 
 ```yaml
 prompt: "Map the population count by block group in Cleveland."
 expected: runs
-spec: map_population_count__bg_2020
+spec: map_population_count_2024__bg_2020
 ```
 
-The prompt names no spec. The agent lists the available specs, resolves the prompt to `map_population_count__bg_2020`, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own. Added after this prompt failed in the chunk 1 Stop C review: the agent ignored the specs and rebuilt the map on the fly.
+The prompt names no spec. The agent lists the available specs, resolves the prompt to `map_population_count_2024__bg_2020`, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own. Added after this prompt failed in the chunk 1 Stop C review: the agent ignored the specs and rebuilt the map on the fly.
 
 ## inv_003 — Plain-language income map
 
 ```yaml
 prompt: "Map median household income by block group in Cleveland."
 expected: runs
-spec: map_median_household_income__bg_2020
+spec: map_median_household_income_2024__bg_2020
 ```
 
-The prompt names no spec. The agent lists the available specs, resolves the prompt to `map_median_household_income__bg_2020`, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own.
+The prompt names no spec. The agent lists the available specs, resolves the prompt to `map_median_household_income_2024__bg_2020`, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own.
 
 ## inv_004 — Plain-language heat map
 
@@ -51,3 +51,33 @@ spec: null
 ```
 
 No Indicator counts crimes per unit. The agent says it isn't available and lists the available Indicators and Visualizations. It must not count points from the selection in `build/points/`, or from the crime file, outside a spec. It creates, drafts, and fetches nothing: no new files in `specs/`, `pipeline/`, `data/`, or `outputs/`.
+
+## inv_006 — Income map with no year or unit
+
+```yaml
+prompt: "Map median household income in Cleveland."
+expected: asks
+spec: null
+```
+
+Two maps match: median household income by block group, 2020–2024 (`map_median_household_income_2024__bg_2020`), and by census tract, 2006–2010 (`map_median_household_income_tract_2010__tract_2020`). The agent asks which one, naming the available years and units, and runs nothing until answered. It doesn't default to the latest year (decision 7, chunk 4a).
+
+## inv_007 — 2010 income map
+
+```yaml
+prompt: "Map median household income in 2010 by census tract."
+expected: runs
+spec: map_median_household_income_tract_2010__tract_2020
+```
+
+The prompt names no spec. The agent lists the available specs, resolves "2010" to the ACS 2006–2010 map, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own.
+
+## inv_008 — Change isn't available yet
+
+```yaml
+prompt: "How has median household income changed by census tract since 2010?"
+expected: not_available
+spec: null
+```
+
+No Indicator computes change over time. The agent says it isn't available and lists the available Indicators and Visualizations. It must not compare the 2006–2010 and 2020–2024 tables, or adjust for inflation, outside a spec. It creates, drafts, and fetches nothing: no new files in `specs/`, `pipeline/`, `data/`, or `outputs/`.

@@ -4,7 +4,7 @@ title: Total population by block group, 2020–2024
 description: Choropleth of total population by 2020 census block group in Cleveland.
 status: stable
 
-indicator: population_count
+indicator: population_count_2024
 geography: bg_2020
 classification: quantile
 classes: 5
