@@ -7,7 +7,7 @@ The expert will choose the "golden" indicators later.
 ## kat_001 — Total population, Cleveland city
 
 ```yaml
-indicator: population_count
+indicator: population_count_2024
 geography: cle_city
 unit: "Cleveland"                # cle_city's id_field is NAME
 expected: 366097
@@ -21,7 +21,7 @@ Value retrieved by the agent from the Census Data API (`acs/acs5` 2024, `B01003_
 ## kat_002 — Median household income, one block group
 
 ```yaml
-indicator: median_household_income
+indicator: median_household_income_2024
 geography: bg_2020
 unit: "390351198002"             # Block Group 2, Census Tract 1198.00, Cuyahoga County
 expected: 42344

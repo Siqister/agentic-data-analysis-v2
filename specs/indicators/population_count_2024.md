@@ -1,8 +1,8 @@
 ---
 type: Indicator
-title: Total population
-description: Number of people, from the ACS 5-year estimates.
-status: stable
+title: Total population, 2020–2024
+description: Number of people, from the ACS 2020–2024 5-year estimates.
+status: draft
 tags: [demographics]
 
 measure: count
