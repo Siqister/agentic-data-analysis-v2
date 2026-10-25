@@ -225,9 +225,9 @@ One Indicator has one vintage, fixed in its `data`. The year is **never a run-ti
 - **Each vintage is its own Indicator**, with the ACS end year at the end of its ID ([§ 12](#naming)), e.g. `median_household_income_tract_2010` beside `median_household_income_tract_2024`. It reports published values in that year's dollars; inflation adjustment belongs to the comparison.
 - **The same published value at a second Census unit** is its own Indicator too, because a median can't move from block groups to tracts. For a unit other than the block group, the unit goes before the year: `median_household_income_tract_2024`. The block group is the default unit and isn't named (`median_household_income_2024`). Decided in chunk 4a; an alternative is in [§ 13](#13-deferred) (*Published values at other units*).
 - **A change Indicator** `builds_on` two vintage Indicators reported at the same geography. Its ID names both years, e.g. `median_household_income_tract_pct_change_2010_2024`.
-  - `measure: percent_change`; `builds_on` has exactly two Indicators, **start first, then end**. No `data`, `crosswalks`, `reliability` or `unit`.
+  - `measure: percent_change`; `builds_on` has exactly two Indicators, **start first, then end**, with the same `unit` (none means `count`). No `data`, `crosswalks`, `reliability` or `unit`.
   - `estimate` = (end ÷ start − 1) × 100. **No MOE for the change** (decided in chunk 4b, a proof of concept): `moe`, `cv` and `reliability` are blank, and the table carries the inputs in `start`, `start_moe`, `end`, `end_moe` ([§ 12](#output-tables-csv)). If either input is blank, so is the change, and `note` says which input and why.
-  - **`inflation`** (optional): `{ index, from: { year, value }, to: { year, value }, source, retrieved }`, both values from the same published table. `start` and `start_moe` are multiplied by `to.value ÷ from.value`, so both inputs are in the end year's dollars. The index values are written in the spec with their source instead of coming from a Resource: the one exception to AGENTS.md rule 3 (expert's decision, chunk 4b).
+  - **`inflation`** (optional): `{ index, from: { year, value }, to: { year, value }, source, retrieved }`, both values from the same published table. Only when both inputs have `unit: dollars`. `start` and `start_moe` are multiplied by `to.value ÷ from.value`, so both inputs are in the end year's dollars. Without `inflation`, `start` and `start_moe` are the start Indicator's values as published. The index values are written in the spec with their source instead of coming from a Resource: the one exception to AGENTS.md rule 3 (expert's decision, chunk 4b).
   - Its `# Caveats` are copied into its output manifests ([§ 8](#8-manifests)).
 - **The change math lives in `lib/`**, so a change Indicator's compiled code is a few lines. A new pair of years is a copied spec with new `builds_on` and a quick review; the agent may draft it from a prompt in author mode.
 - When a third vintage of one measure is needed, revisit *Non-expert parameters* ([§ 13](#13-deferred)).
@@ -254,7 +254,7 @@ One map. **`map`** (optional) sets the kind: `choropleth` (the default) or `hexb
 **Choropleth.** Its `indicator` is not a `points` Indicator.
 - **`indicator`** sets the color. **`geography`** must be one the Indicator is reported at.
 - The tooltip shows the unit's name, the estimate, the margin of error, and the reliability. It also shows any `also_show` Indicators.
-- **`percent_change`:** the tooltip and legend show a signed percent ("+12.3%"); the tooltip adds `start` and `end` in dollars and leaves out the blank MOE and reliability. It's drawn with `manual` breaks around 0 and a diverging scheme.
+- **`percent_change`:** the tooltip and legend show a signed percent ("+12.3%"); the tooltip adds `start` and `end`, formatted by the inputs' `unit` ("Start, in end-year dollars" only with `inflation`), and leaves out the blank MOE and reliability. It's drawn with `manual` breaks around 0 and a diverging scheme.
 
 **Hexbin heat map.** Its `indicator` is a `points` Indicator, and `geography` is that Indicator's `geography`.
 - **`hex_size_m`** (required): hex width across flats, in metres, at least the privacy floor ([§ 12](#privacy)).
@@ -339,7 +339,7 @@ Compiled code is tracked in git.
 | Build crosswalk | Build a weights table using one of the allowed methods, or the pairs table for `matched` |
 | Apply crosswalk | Move counts and their margins of error between geographies, or copy matched values unchanged |
 | Rate from counts | Percentage or rate from numerator and denominator counts, with margin of error |
-| Change | Percent change from a start and an end Indicator's tables, with an inflation factor; carries the inputs and their MOEs |
+| Change | Percent change from a start and an end Indicator's tables, with an inflation factor when there is one; carries the inputs and their MOEs |
 | Margin-of-error math | Census Bureau formulas for sums, ratios, and proportions |
 | Reliability | Compute CV and flag or suppress values per the Indicator's settings |
 | Point aggregation | Count points within polygons, following the Indicator's point rules |
@@ -524,7 +524,7 @@ cleveland-analysis/
 - CV = (MOE ÷ 1.645) ÷ estimate. A suggested threshold is 0.30, set per Indicator. `reliability` is `low` above it, otherwise `ok`, at every geography the Indicator is reported at.
 - An estimate of 0 has no CV: `cv` is blank, `reliability` is `low`, and `note` says "estimate is 0; CV undefined".
 - A blank `estimate` or `moe` has no CV: `cv` and `reliability` are blank.
-- **Counts through a crosswalk:** estimate = Σ weight × estimate, MOE = √Σ (weight × MOE)². If some units have a blank estimate or MOE, the sums use the units that have one, and `note` says how many were left out of each.
+- **Counts through a crosswalk:** estimate = Σ weight × estimate, MOE = √Σ (weight × MOE)². If some units have a blank estimate or MOE, the sums use the units that have one, and `note` says how many were left out of each. Through a `matched` crosswalk, a count is copied unchanged with its MOE and note, as for any measure ([§ 4.3](#matched)).
 
 ### Output tables (CSV)
 
@@ -536,7 +536,7 @@ cleveland-analysis/
 | `moe`, `cv` | Margin of error and CV (blank if not applicable) |
 | `reliability` | `ok` or `low` |
 | `numerator`, `numerator_moe`, `denominator`, `denominator_moe` | For percentages and rates |
-| `start`, `start_moe`, `end`, `end_moe` | For `percent_change` only, after `reliability`: the two inputs, `start` in the end year's dollars |
+| `start`, `start_moe`, `end`, `end_moe` | For `percent_change` only, after `reliability`: the two inputs; `start` and `start_moe` multiplied by the inflation factor when there is one, otherwise as published |
 | `note` | Anything unusual, e.g. "suppressed: low reliability" |
 
 - Values are stored at full precision and rounded only for display: percentages to 1 decimal place (a percent change with its sign, e.g. "+12.3%"), counts and dollars to whole numbers (dollars with a `$`).
