@@ -20,9 +20,9 @@ import yaml
 import geopandas as gpd
 import pandas as pd
 
-from lib import ROOT, census, crosswalk, geography, heatmap, known_answers, moe, output, points
+from lib import ROOT, census, cluster, crosswalk, geography, heatmap, known_answers, moe, output, points
 from lib import validate
-from lib.choropleth import draw
+from lib.choropleth import draw, draw_categorical
 from lib.compiled import code_hash, code_path, code_status, read_header
 from lib.snapshot import Snapshot, census_api
 from lib.specs import Spec, dependencies, load_all
@@ -197,7 +197,19 @@ def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> Non
         print(f"  {len(selected)} points; excluded: " + ", ".join(f"{k} {v}" for k, v in excluded.items()))
         print(f"  wrote {path.relative_to(ROOT)}")
         return
-    tables = report(ind, specs, ctx, module.compute(ctx))
+    try:
+        native = module.compute(ctx)
+    except ValueError as e:   # a structural problem found by lib/, e.g. a cluster run-time check
+        raise Stop(f"{ind.id}: {e}")
+    tables = report(ind, specs, ctx, native)
+    clustered = ind.meta["measure"] == "cluster"
+    if clustered:
+        # Written before the known-answer tests, so the expert can choose `k` even if one fails.
+        ids, cfg, geo = ind.meta["builds_on"], ind.meta["cluster"], ind.meta["geography"]
+        diag = output.CLUSTERS / f"{ind.id}__{geo}__diagnostics.csv"
+        diag.parent.mkdir(parents=True, exist_ok=True)
+        cluster.diagnostics(tables[geo], ids, cfg).to_csv(diag, index=False)
+        print(f"  wrote {diag.relative_to(ROOT)}")
 
     results = {}
     for test_id, test in known_answers.load().items():
@@ -212,10 +224,12 @@ def run_indicator(ind: Spec, specs: dict[str, Spec], force: bool = False) -> Non
     data = _dedupe([d for m in inputs.values() for d in m["data"]] + [s.record() for s in ctx.snaps])
     tests = {k: v["status"] for k, v in results.items()}
     for g, path in outputs.items():
-        m = output.write_table(tables[g], path, bf, data, tests)
+        m = output.write_table(tables[g], path, bf, data, tests, ids if clustered else ())
         if inputs:
             m["indicator_inputs"] = [{"path": v["output"], "fingerprint": v["fingerprint"]} for v in inputs.values()]
-        if ind.meta["measure"] == "percent_change":
+        if clustered:
+            m["clusters"] = cluster.summary(tables[g], ids, cfg)
+        if ind.meta["measure"] in ("percent_change", "cluster"):
             m["caveats"] = caveats(ind)
         if inputs or "caveats" in m:
             output.manifest_path(path).write_text(yaml.safe_dump(m, sort_keys=False, allow_unicode=True))
@@ -294,6 +308,11 @@ def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) ->
     note = source_note(ind, specs, data, viz)
     if viz.meta.get("map") == "hexbin":
         classes = heatmap.draw(viz.meta, output.read_points(table_path), geo, note, out)
+    elif ind.meta["measure"] == "cluster":
+        inputs = [specs[i] for i in ind.meta["builds_on"]]
+        draw_categorical(viz.meta, inputs, specs[geo_id].meta.get("census_unit"), output.read_table(table_path),
+                         ind_manifest["clusters"], geo, note, out)
+        classes = {}
     else:
         # A change map formats start and end by its inputs' unit (they share one, § 4.4).
         unit_of = specs[ind.meta["builds_on"][0]] if ind.meta["measure"] == "percent_change" else ind
@@ -303,6 +322,8 @@ def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) ->
     m = output.write_manifest(out, bf, data, ind_manifest["known_answer_tests"])
     m["indicator_output"] = {"path": ind_manifest["output"], "fingerprint": ind_manifest["fingerprint"]}
     m["classes"] = {"classification": viz.meta["classification"], **classes}
+    if ind_manifest.get("clusters"):
+        m["clusters"] = ind_manifest["clusters"]
     if ind_manifest.get("caveats"):
         m["caveats"] = ind_manifest["caveats"]
     output.manifest_path(out).write_text(yaml.safe_dump(m, sort_keys=False, allow_unicode=True))
@@ -325,7 +346,8 @@ def source_note(ind: Spec, specs: dict[str, Spec], data: list[dict], viz: Spec |
             if d["source"] in specs and specs[d["source"]].type == "Geography"]
     if geos:
         parts.append("Boundaries: " + "; ".join(dict.fromkeys(geos)))
-    note = "Source: " + " · ".join(parts) + "."
+    # dict.fromkeys: an input reached twice through builds_on (e.g. by a cluster Indicator) is named once.
+    note = "Source: " + " · ".join(dict.fromkeys(parts)) + "."
     if census_data:
         note += " Margins of error at 90% confidence."
     extra = _section(viz.body, "Source note") if viz else ""

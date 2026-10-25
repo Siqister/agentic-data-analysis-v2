@@ -119,7 +119,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/06a-tract-clusters`
 
-**Status:** ✅ Stop A passed 2026-10-25 (decisions 5–10). ✅ Stop B passed 2026-10-25 (decision 11). Next: task 5.
+**Status:** ✅ Stop A passed 2026-10-25 (decisions 5–10). ✅ Stop B passed 2026-10-25 (decision 11). Tasks 5–6 done. 🛑 **Stop C:** the expert reviews `lib/`, the compiled code and the outputs, sets `k` (*Stop C notes*), and approves; then the invocation tests in fresh sessions.
 
 **Exercises (capability checklist):** new items: an Indicator built on three or more Indicators; clustering (`measure: cluster`, k-means) with a diagnostics build file; a categorical value; a categorical choropleth; a new third-party dependency. That's more than one new kind of capability. They come as one unit (a cluster Indicator needs a categorical map to be seen), so the chunk keeps them together and splits off the charts instead.
 
@@ -245,6 +245,21 @@ For the expert's review at Stop B.
 2. **Extra dependencies.** scikit-learn 1.9.1 also brought `cloudpickle` and `narwhals`, besides scipy, joblib and threadpoolctl (design issue 7 named those three). No existing package changed version in `uv.lock`.
 3. **Categorical schemes.** The validator accepts the d3 v7.9.0 categorical schemes, with their color counts: Category10, Accent, Dark2, Observable10, Paired, Pastel1, Pastel2, Set1, Set2, Set3, Tableau10. Design issue 6 fixed `k` at 2–10 for Tableau10; a scheme with fewer colors than `classes` is an error.
 4. **Checks against task 2 and 3.** Existing tables, maps and manifests identical apart from `created`, `lib_hash` and the fingerprints built from `lib_hash`; the crime selection's GeoPackage has the same rows and geometry but a new internal write time (`gpkg_contents.last_change`), so it isn't byte-identical. `kat_001`–`kat_007` pass.
+
+#### Stop C notes
+
+For the expert's review at Stop C.
+
+1. **Results match the chat run.** 159 rows, 130 clustered (the same 130 tracts as the income change), 29 not. At k = 5, sizes 25, 36, 53, 1, 15 and every cluster median as in *Expected size*. Diagnostics: sizes and silhouette match at every k; stability within 0.03 (0.43, 0.36, 0.55, 0.53, 0.56, 0.58, 0.57 for k = 2–8). `kat_008` passes. A forced rerun reproduces the table, diagnostics and map byte for byte.
+2. **Stability**, as built: for each of 50 bootstrap resamples (units drawn with replacement, `numpy` generator seeded with `seed`), k-means is fitted on the resample and predicts every clustered unit; stability is the mean adjusted Rand index against the full fit. z-scores are from the full data. The chat run's method may differ in such details.
+3. **Choosing `k`.** `build/clusters/income_population_cluster_tract_2010_2024__tract_2020__diagnostics.csv`; sizes are listed in cluster-number order. Changing `k` is a spec change: recompile, review, and recompute `kat_008`'s expected value.
+4. **`lib/` to review.**
+   - `cluster.py` (new): input table and notes, log, z-scores, k-means (`n_init` 50, Lloyd), numbering, run-time checks, `clusters` block, diagnostics.
+   - `runner.py`: for `cluster`, writes the diagnostics file (before the known-answer tests, so it's there even if one fails) and adds `clusters` and `caveats` to the manifests. A `ValueError` from compiled code now stops the run with a message, for every Indicator (before, it was a traceback). The source note names each data source once (`dict.fromkeys`), since the cluster Indicator reaches the 2024 income table twice; other maps' notes are unchanged.
+   - `output.py`: `write_table` puts the input columns after `reliability`; `read_table` reads every column except the four text ones as numbers, so the input columns read back as numbers. Same result for existing tables.
+   - `choropleth.py`: `draw_categorical` with its own page template; the existing template is untouched, and existing maps are byte-identical.
+5. **Map.** The legend's column headers and the tooltip use each input Indicator's `title` (long, but reviewed text). Inputs are formatted by measure: "$41,743", "−12.5%", "+293.1%". The tooltip's hover wasn't exercised in the headless check; please hover a few tracts.
+6. **Existing outputs** unchanged after the `lib/` changes, apart from `created`, `lib_hash` and fingerprints; `kat_001`–`kat_007` pass.
 
 #### Decisions (expert, 2026-10-25)
 
@@ -461,3 +476,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 6a requirements and design issues 1–10. Decisions 5–10, all as recommended: log income, no clipping; a one-tract cluster accepted; k = 5 to start; scikit-learn; `kat_008`, `inv_013`, `inv_014` as written; `Tableau10`. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (add scikit-learn). Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Task 1: plan committed on `main`, branch `chunk/06a-tract-clusters`. Task 2: scikit-learn 1.9.1 pinned. Task 3: design issues 1–10 in architecture.md, templates, validation.md and `lib/validate.py` (new rules checked against bad specs). Existing outputs unchanged apart from `created`, `lib_hash`, fingerprints (and the GeoPackage's write time); `kat_001`–`kat_007` pass. Task 4: two specs drafted, indexes, `kat_008`, `inv_013`, `inv_014`. Validation: only the missing compiled code (task 5). | 🛑 Stop B: expert reviews specs, tests and *Stop B notes* 1–4. Then task 5 (`lib/cluster.py`, categorical choropleth, compile). |
 | 2026-10-25 | Claude Code | ✅ Stop B passed (decision 11): both specs retitled "Census tracts clustered by income, income change, and population change"; everything else approved. | Task 5: `lib/cluster.py`, categorical choropleth, compile. |
+| 2026-10-25 | Claude Code | Task 5: `lib/cluster.py`, categorical choropleth, runner and output changes; cluster Indicator compiled. Task 6: validation clean, `kat_001`–`kat_008` pass, existing outputs unchanged, expected size matches the chat run (130 of 159; k = 5 sizes and medians exact), diagnostics file and map written, reruns reproducible. | 🛑 Stop C: expert reviews `lib/` and code, hovers the map, sets `k` (*Stop C notes* 1–6), approves. Then `inv_001`–`inv_014` in fresh sessions. |
