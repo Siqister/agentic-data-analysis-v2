@@ -117,7 +117,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/04b-tract-income-change`
 
-**Status:** ✅ Stop A passed 2026-10-25: requirements and design issues 1–7 approved; Stop A questions answered (decisions 7–12). Next: task 1, in Claude Code.
+**Status:** ✅ Stop A passed 2026-10-25. Tasks 1–2 done (factor 462.511 ÷ 319.8; see *Task 2 findings*). Next: task 3.
 
 **Exercises (capability checklist):**
 - New items to add: Indicator that builds on other Indicators; `percent_change` measure; manual classification with a diverging scheme; caveats in manifests.
@@ -210,6 +210,14 @@ Answered 2026-10-25. Recorded as decisions 7–12.
 5. Build the `lib/` changes. Compile `pipeline/indicators/median_household_income_tract_pct_change_2010_2024.py`.
 6. Run validation and known-answer tests, and produce the outputs. Check the expected size. Tune the breaks with the expert by editing frontmatter. 🛑 **Stop C:** the expert reviews and approves; then the invocation tests run in fresh sessions.
 7. Retro per the working method. Remove *Change over time* from architecture.md § 13.
+
+#### Task 2 findings (2026-10-25)
+
+✅ **R-CPI-U-RS read from BLS's current all-items file**, `https://www.bls.gov/cpi/research-series/r-cpi-u-rs-allitems.xlsx` ("Consumer Price Index Retroactive Series (R-CPI-U-RS), U.S. city average, All items, Not Seasonally Adjusted, December 1977=100", 1977–2025), linked from the R-CPI-U-RS home page (last modified 2026-04-03, after the corrections of 2026-03-31 to 04-03). Retrieved 2026-10-25; file SHA-256 `355ea8a1…2544d8`.
+- **2010 annual average (`AVG`): 319.8.** Not 320.4: that is the September 2010 monthly value. The cell is a stored value at one decimal (the monthly mean is 319.83).
+- **2024 annual average: 462.51116666666667**, stored as the unrounded mean of the twelve monthly values, which have three decimals from 2023 on. Proposed for the spec: **462.511** (three decimals, like the monthly values); the difference in any percent change is under 0.0001 points.
+- **Factor: 462.511 ÷ 319.8 = 1.44625.** The plan's "about 1.44" holds; with the median ratio of about 1.38, the median change is about −4.6%.
+- Access: BLS refuses scripted downloads (HTTP 403). The page and the file were read with the agent's web fetch tool; the agent didn't disguise a script as a browser. A rerun of this lookup needs the same route, or the expert downloading the file.
 
 #### Decisions (expert, 2026-10-25)
 
@@ -368,5 +376,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | Stop B passed (decision 12). Task 5: `lib/` for `matched`, `GEO_ID`, delimited files, validation; both tract Indicators compiled. Task 6: validation clean (also `--network`), `kat_001`–`kat_004` pass, existing outputs byte-identical, new tables and map written, go/no-go summary (130 of 159 2020 tracts have both values at 0.80). | 🛑 Stop C: expert reviews `lib/` and code, sets `min_overlap`, decides on 4b, runs `inv_001`–`inv_008`, approves. Then task 7 (retro). |
 | 2026-10-25 | Claude Code | Expert approved: 12 specs `stable`, 4 code files `verified`, `min_overlap` 0.80. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the 2010 map; `kat_001`–`kat_004` pass. | 🛑 Expert runs `inv_001`–`inv_008` in fresh sessions; decides on 4b. Then task 7 (retro). |
 | 2026-10-25 | Claude Code | Expert ran `inv_001`–`inv_008` in fresh sessions: all pass. 4b goes ahead. Task 7: retro recorded, checklist updated (URL file Resource, second vintage, tracts, 2010 boundaries, median aggregation, `matched`), validation.md (invocation tests after approval), `chunk/04a-tract-2010-income` merged into `main`. | Write 4b requirements in chat, into Current chunk. |
+| 2026-10-25 | Claude Code | 4b task 1: plan committed on `main`, branch `chunk/04b-tract-income-change`. Task 2: R-CPI-U-RS from BLS's current file: 2010 = 319.8 (not 320.4), 2024 = 462.511; factor 1.44625. | Task 3: design issues 1–7. |
 | 2026-10-25 | Chat | Wrote chunk 4b requirements into Current chunk: change Indicator (`percent_change`, `builds_on`, `inflation`), diverging map, design issues 1–7, Stop A questions 1–6, `kat_005`, `inv_008`–`inv_010`. Fixed the order of two chat rows in this log. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4b requirements and design issues 1–7. Decisions 7–12: `percent_change`; no MOE for the change; breaks ±5/10/15 % (8 classes, `RdBu`); start and end in the tooltip; manifest caveats for the change Indicator only; `kat_005` by hand. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (inflation factor). Stop B after specs are drafted. |
