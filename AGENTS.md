@@ -20,7 +20,7 @@ Specs follow the **Open Knowledge Format (OKF) v0.2** ([architecture.md § 3](ar
 
 ## Rules
 
-1. **Every request for a table, map, or measure goes through the runner.** First run `uv run python -m lib.runner list` and match the request to one spec ID. If several match, ask. If none match, say it isn't available and list what is. Then run `uv run python -m lib.runner run <id>`. Never write analysis, fetching, or mapping code outside the compile step, even if the request doesn't mention specs.
+1. **Every request for a table, map, or measure goes through the runner.** First run `uv run python -m lib.runner list` and match the request to one spec ID. If several match, ask which one: list the matching specs and what tells them apart (e.g. the available years and units), and run nothing until answered. Never default to the latest. If none match, say it isn't available and list what is. Then run `uv run python -m lib.runner run <id>`. Never write analysis, fetching, or mapping code outside the compile step, even if the request doesn't mention specs.
 2. **Specs are the source of truth.** Compute only what a spec describes. If a spec is unclear, incomplete, or seems wrong, stop and ask the expert. Never guess.
 3. **Pull only what a spec names.** Data may come only from a Resource or Geography that has a spec, and only the specific datasets and fields named in an Indicator or Crosswalk. If you think more data is needed, tell the expert and suggest sources. Never write a Resource spec on your own.
 4. **Do not interpret.** Produce indicators and maps, not findings. Don't describe, rank, or characterize places. Titles describe what is measured, never what it shows.

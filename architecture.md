@@ -69,7 +69,7 @@ This file holds every requirement for building the project. [AGENTS.md](AGENTS.m
 
 ### Invocation
 
-- A request is a plain-language prompt naming an Indicator or Visualization, e.g. "show me population by block group." The agent maps it to **one spec ID**. If more than one spec could match, it asks.
+- A request is a plain-language prompt naming an Indicator or Visualization, e.g. "show me population by block group." The agent maps it to **one spec ID**. If more than one spec could match, it asks which one, naming what tells them apart (e.g. the available years and units), and runs nothing until answered. It never defaults to the latest year (chunk 4a).
 - The agent carries out the request **only through reviewed code** in `lib/` and `pipeline/`. It never re-derives a computation for a single request. This holds even when the prompt doesn't mention specs; [AGENTS.md](AGENTS.md) rule 1 states it as the agent's first rule, because putting it only here wasn't enough (chunk 1).
 - Commands: `uv run python -m lib.runner list` (what's available), `run <id> [--mode author|run]`, `status` (code and results staleness); `uv run python -m lib.validate [--network]`.
 - The **runner** in `lib/` does steps 2–6 above. It is generic, so it lives in `lib/`, not `pipeline/`. Graph traversal is automatic: it reads the reference fields in frontmatter ([§ 5](#5-the-dependency-graph)) and walks down from the requested spec.
@@ -121,7 +121,7 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 |---|---|---|---|
 | **Resource** | One API, file, or dataset | `specs/resources/` | `resource`, `auth`, `datasets` |
 | **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule`, `census_unit` |
-| **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source` |
+| **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source`, `min_overlap`, `fields` |
 | **Indicator** | One measure, or a reviewed selection of points | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability`, `window` |
 | **Visualization** | One map | `specs/visualizations/` | `map`, `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show`, `hex_size_m` |
 
@@ -171,6 +171,7 @@ One boundary file = one Geography: `bg_2020`, `tract_2020`, `cle_city`, `cle_nei
 - The coordinate system is read from the file itself ([§ 12](#12-conventions)).
 - Boundary files are snapshotted like Resources ([§ 10](#10-getting-data)).
 - `census_unit` (optional): the Census Data API unit its units match, `block group` or `tract`, with `id_field` holding the Census `GEOID`. Required for a Geography that an Indicator with Census data is calculated at. The request extent is **derived, never written down**: `lib/` reads the kept units' GEOIDs (after `within`) and requests those units' states and counties, so it can't disagree with the boundary file.
+- **`GEO_ID` instead of `GEOID`.** Census 2010 cartographic files have no `GEOID` field. Their `GEO_ID` is the summary level, `US`, and the GEOID, e.g. `1400000US39035101101` for a tract. With `census_unit` and `id_field: GEO_ID`, `lib/` keeps the part after `US` as the unit's code. Use cartographic files, not TIGER/Line, for both boundary years: TIGER/Line shapes extend into Lake Erie, which changes the majority-area rule for lakeshore units (chunk 4a).
 
 ### 4.3 Crosswalk
 
@@ -184,9 +185,20 @@ Moves data from one Geography (`from`) to another (`to`) by producing a **weight
 | `areal` | By share of land area | Only when nothing better exists |
 | `centroid` | The whole unit goes to the target containing its center | Rough approximation |
 | `nested` | Each unit is entirely inside one target (all weights 1) | Block groups → tracts |
+| `matched` | Not split: a target unit takes the value of the one source unit it overlaps almost completely, both ways; other target units are blank | The same kind of unit across boundary years, e.g. 2010 tracts → 2020 tracts |
 
 - `nested` is also valid when the `from` Geography's `within` equals `to`: the `within` filter already assigned every unit to that one target, e.g. `bg_2020` → `cle_city`.
-- Crosswalks move **counts only**, never percentages or medians.
+- Crosswalks move **counts only**, never percentages or medians, **except `matched`**, which copies each value unchanged ([below](#matched)).
+
+#### `matched`
+
+Pairs units one to one across boundary years, from a Census relationship file (land area from full-resolution TIGER). Decided in chunk 4a.
+
+- **Fields.** `weights_source` is the relationship-file Resource. `min_overlap` (above 0.5, at most 1) is the threshold. `fields` names the file's columns: `from_id`, `to_id`, `from_area`, `to_area`, `shared_area`. No `weights`.
+- **Rule.** Source unit *a* and target unit *b* **match** when their shared land area is at least `min_overlap` of *a*'s land area **and** at least `min_overlap` of *b*'s. With `min_overlap` above 0.5, each unit has at most one match. A unit with no land area never matches.
+- **Values.** A target unit with a match takes its source unit's `estimate`, `moe` and `note` unchanged. A target unit with no match, or whose match isn't in the `from` Geography, is blank, with `note` "no matching 2010 tract" (built from the `from` Geography's `census_unit` and the boundary year at the end of its ID, [§ 12](#naming); so `from` needs a `census_unit`). Reliability is computed again at the target from the copied values.
+- **Any measure** can use it, because nothing is split or summed. A `median` or `index` Indicator still explains it in `# Aggregation`.
+- **Build file.** `build/crosswalks/<id>.csv` lists every overlapping pair with both overlap shares and whether it matched, so the expert can review the threshold. Changing `min_overlap` is a frontmatter change: results rerun, no recompile.
 - Census blocks are used here to build weights. They are never reported.
 
 ### 4.4 Indicator
@@ -206,10 +218,11 @@ One measure, such as "% of households with housing cost burden", or a reviewed s
 
 #### Vintages and change over time
 
-One Indicator has one vintage, fixed in its `data`. The year is **never a run-time parameter**: it decides the Geography (ACS 2011–2019 is published on 2010 block groups, 2020 onward on 2020 ones), the crosswalks, and sometimes the field codes, and those are reviewed parts of the graph. Rejected: one Indicator whose year is taken from the prompt (unreviewed combinations, colliding outputs). Decided in chunk 4.
+One Indicator has one vintage, fixed in its `data`. The year is **never a run-time parameter**: it decides the Geography (ACS 2010–2019 is published on 2010 census geography, 2020 onward on 2020 geography), the units available (the Census API serves block groups only from vintage 2013), the crosswalks, and sometimes the field codes, and those are reviewed parts of the graph. Rejected: one Indicator whose year is taken from the prompt (unreviewed combinations, colliding outputs). Decided in chunk 4.
 
-- **Each vintage is its own Indicator**, with the ACS end year at the end of its ID ([§ 12](#naming)), e.g. `median_household_income_2010` beside `median_household_income_2024`. It reports published values in that year's dollars; inflation adjustment belongs to the comparison.
-- **A change Indicator** `builds_on` two vintage Indicators reported at the same geography. Its ID names both years, e.g. `median_household_income_pct_change_2010_2024`.
+- **Each vintage is its own Indicator**, with the ACS end year at the end of its ID ([§ 12](#naming)), e.g. `median_household_income_tract_2010` beside `median_household_income_tract_2024`. It reports published values in that year's dollars; inflation adjustment belongs to the comparison.
+- **The same published value at a second Census unit** is its own Indicator too, because a median can't move from block groups to tracts. For a unit other than the block group, the unit goes before the year: `median_household_income_tract_2024`. The block group is the default unit and isn't named (`median_household_income_2024`). Decided in chunk 4a; an alternative is in [§ 13](#13-deferred) (*Published values at other units*).
+- **A change Indicator** `builds_on` two vintage Indicators reported at the same geography. Its ID names both years, e.g. `median_household_income_tract_pct_change_2010_2024`.
 - **The change math lives in `lib/`**, so a change Indicator's compiled code is a few lines. A new pair of years is a copied spec with new `builds_on` and a quick review; the agent may draft it from a prompt in author mode.
 - When a third vintage of one measure is needed, revisit *Non-expert parameters* ([§ 13](#13-deferred)).
 
@@ -316,8 +329,8 @@ Compiled code is tracked in git.
 | Fetch & load | Fetch a request from a Resource into a snapshot; load snapshots and Geographies; read only the named fields of a file Resource |
 | Runner | Walk the graph from a requested spec, check staleness, fetch, compute, apply crosswalks and reliability, test, and write outputs ([§ 2](#invocation)) |
 | Selection | For a `points` Indicator: apply the `window` in local dates, then write the compiled code's points and exclusion counts to `build/points/` |
-| Build crosswalk | Build a weights table using one of the allowed methods |
-| Apply crosswalk | Move counts and their margins of error between geographies |
+| Build crosswalk | Build a weights table using one of the allowed methods, or the pairs table for `matched` |
+| Apply crosswalk | Move counts and their margins of error between geographies, or copy matched values unchanged |
 | Rate from counts | Percentage or rate from numerator and denominator counts, with margin of error |
 | Margin-of-error math | Census Bureau formulas for sums, ratios, and proportions |
 | Reliability | Compute CV and flag or suppress values per the Indicator's settings |
@@ -406,6 +419,7 @@ HTML maps also show a short source note on the page, generated from the manifest
   ```
 
   A file Resource at a URL is snapshotted the same way, as one request for the whole file. One whose `resource` is a local file is hashed in place, like a local Geography (below).
+- **Delimited text files** (e.g. a Census relationship file): `lib/` reads only the named columns, all as text so codes keep their leading zeros, with any byte-order mark removed. Numbers are converted where they're used.
 - **Geography boundary files are snapshotted too.**
   - A Geography whose `resource` is a **URL** is fetched once into `data/raw/<geography id>/<hash>/`, with a `snapshot.yaml` recording the URL, retrieval time, and hash.
   - A Geography whose `resource` is a **local file** is hashed in place; it is not copied.
@@ -465,7 +479,7 @@ cleveland-analysis/
   | Resource | `<publisher>_<name>` | `census_api`, `cle_311_calls` |
   | Geography | `<unit>_<boundary year>`, or a `cle_` prefix for city-specific ones | `bg_2020`, `cle_neighborhoods` |
   | Crosswalk | `<from>__to__<to>` | `bg_2020__to__cle_neighborhoods` |
-  | Indicator | what it measures, not where; Census data ends with the ACS end year ([§ 4.4](#vintages-and-change-over-time)) | `housing_cost_burden_pct_2024` |
+  | Indicator | what it measures, not where; Census data ends with the ACS end year, after the unit if it isn't the block group ([§ 4.4](#vintages-and-change-over-time)) | `housing_cost_burden_pct_2024`, `median_household_income_tract_2024` |
   | Indicator (selection) | `points_<what it selects>` | `points_reported_crime_incidents` |
   | Visualization | `map_<indicator>__<geography>` | `map_housing_cost_burden_pct__cle_neighborhoods` |
 
@@ -489,7 +503,7 @@ cleveland-analysis/
 ### Counts first, then rates
 
 - **Never average percentages.** Move numerator and denominator **counts** through the crosswalk, add them up, then divide.
-- **Medians** can't be moved by allocation. Use a valid method described in `# Aggregation`, or report at the native geography only.
+- **Medians** can't be moved by allocation. Use a valid method described in `# Aggregation` (e.g. a `matched` crosswalk, [§ 4.3](#matched)), or report at the native geography only.
 - **Citywide values** are aggregated from the native geography like any other output. The Census Bureau's published value for Cleveland city is a **known-answer check**, not the reported figure.
 
 ### Uncertainty (ACS)
@@ -546,7 +560,8 @@ Agreed during design, but not part of the first build.
 | **Non-expert parameters** | Pre-approved settings run-mode users may change, e.g. survey year. Trigger for survey year: a third vintage of one measure ([§ 4.4](#vintages-and-change-over-time)); then an approved list of years, with the year in output names. |
 | **Data-source proposals log** | A place for the agent's suggested new sources. For now, they're raised in conversation. |
 | **More OKF features** | `sources`, `stale_after`, attested computation, `log.md`. |
-| **Change over time** | Comparisons across years, including converting 2010 boundaries to 2020. Structure decided ([§ 4.4](#vintages-and-change-over-time)); being built in chunks 4a–4b. |
+| **Change over time** | Comparisons across years, including converting 2010 boundaries to 2020. Structure decided ([§ 4.4](#vintages-and-change-over-time)), with the `matched` crosswalk ([§ 4.3](#matched)); being built in chunks 4a–4b at tract level. |
 | **Packaging as a skill** | After the Cleveland study works end to end. AGENTS.md rule 1 (route every request through the runner) moves into the skill, with a description that matches plain-language requests. |
 | **Shared Visualization defaults** | One Visualization spec per map stays the rule: each map keeps its own ID, approval, and `# Design choices`. Once house style repeats across many maps, make `classification` and `classes` optional, with defaults in `lib/`; changing a default is then a reviewed `lib/` change that reruns all results. Triggers: one setting changed across every map, shared color scales across related maps (*Visualization rules*), or `# Design choices` sections that are only boilerplate. Rejected: one generic `choropleth` spec that takes its indicator at run time (unreviewed combinations; see *Non-expert parameters*), and map settings inside Indicators (a color change would make compiled code stale). Raised in chunk 2. |
+| **Published values at other units** | An `# Aggregation` method "use the published value at the target unit", through a block group → tract crosswalk, so one Indicator covers both units instead of one Indicator per unit ([§ 4.4](#vintages-and-change-over-time)). More general, more `lib/` work. Trigger: many measures needed at tracts. Raised in chunk 4a. |
 | **GeoPackage layers** | A `layer` field on Geography, for multi-layer files. Not needed while every file has one layer. |

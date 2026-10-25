@@ -10,7 +10,7 @@ resource: https://www2.census.gov/geo/tiger/TIGER2020/BG/tl_2020_39_bg.zip   # U
 status: draft                                # draft | stable (only the expert sets stable)
 tags: [census, boundaries]                   # (optional)
 
-id_field: GEOID                              # unique code for each unit (always read as text)
+id_field: GEOID                              # unique code for each unit (always read as text); GEO_ID for Census 2010 cartographic files
 name_field: NAMELSAD                         # (optional) display name
 within: cle_city                             # (optional) keep only units inside this Geography
 within_rule: majority_area                   # (required with within) majority_area | centroid | any
