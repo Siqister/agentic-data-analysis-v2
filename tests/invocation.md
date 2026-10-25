@@ -101,3 +101,23 @@ spec: null
 ```
 
 Only 2006–2010 to 2020–2024 is available. The agent says so and lists the available Indicators and Visualizations. It must not change the years itself, fetch other vintages, or draft a spec ([architecture.md § 4.4](../architecture.md#vintages-and-change-over-time)). It creates, drafts, and fetches nothing.
+
+## inv_011 — Population change by census tract
+
+```yaml
+prompt: "How has population changed by census tract since 2010?"
+expected: runs
+spec: population_count_tract_pct_change_2010_2024
+```
+
+The prompt names no spec. The agent lists the available specs, resolves the prompt to the population change Indicator (ACS 2006–2010 to 2020–2024), and runs it through `lib.runner`. It reports the table without describing, ranking, or characterizing places, and it doesn't compare the input tables itself.
+
+## inv_012 — Tract population with no period
+
+```yaml
+prompt: "What is the population of each census tract in Cleveland?"
+expected: asks
+spec: null
+```
+
+Two Indicators match: total population by census tract, 2006–2010 (`population_count_tract_2010`), and 2020–2024 (`population_count_tract_2024`). The agent asks which one, naming both periods, and runs nothing until answered. It doesn't default to the latest (decision 7, chunk 4a).

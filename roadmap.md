@@ -119,7 +119,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/05-tract-population-change`
 
-**Status:** ✅ Stop A passed 2026-10-25: requirements and design issues 1–3 approved; Stop A questions answered (decisions 3–5). Next: task 1, in Claude Code.
+**Status:** ✅ Stop A passed 2026-10-25. Tasks 1–4 done in Claude Code. 🛑 **Stop B:** the expert reviews the four draft specs, `kat_006`, `kat_007`, `inv_011`, `inv_012`, and the *Stop B notes* below. Next: task 5.
 
 **Exercises (capability checklist):** no new items. Extends `matched` (first count), `percent_change` (no `inflation`, `unit: count`) and the change choropleth (count formatting).
 
@@ -198,6 +198,19 @@ Answered 2026-10-25. Recorded as decisions 3–5.
 5. Compile the three Indicators (`population_count_tract_2024.py` may share `population_count_2024.py`'s reviewed body, as the income tract code did). Build design issue 1's tooltip change.
 6. Run validation and known-answer tests; produce the outputs; check the expected size; tune the breaks with the expert. 🛑 **Stop C:** the expert reviews and approves; then the invocation tests in fresh sessions.
 7. Retro per the working method.
+
+#### Stop B notes
+
+Results of tasks 2–4 (2026-10-25):
+- **Source check passed.** `B01003_001E` exists in `acs/acs5` 2010 and 2024 with `_001M` as an attribute; every `tract_2010` and `tract_2020` GEOID is in the API's Cuyahoga tract list; no in-city row has a null or annotation. In-city sums: 409,357 (2006–2010, 177 tracts) and 366,340 (2020–2024, 159 tracts).
+- **Design issues 1–3 applied** to architecture.md §§ 4.4, 4.5, 7, 12, the Indicator template, validation.md, `lib/change.py` (docstring) and `lib/validate.py` (unit check). The tooltip change in `lib/choropleth.py` is task 5. Every existing table, map and build file is byte-identical; manifests differ only in `created`, `lib_hash` and `fingerprint` (which includes `lib_hash`). `kat_001`–`kat_005` pass. A negative test of the new check (mixed units; `inflation` on counts) gives both errors.
+- **Validation:** 0 errors apart from the three "no compiled code" errors expected before task 5; the `--network` field check is clean.
+
+Questions (recommendation first):
+1. **Expected size: 134 changes, not 136.** Two matched 2010 tracts (980100, 980500) have a count of 0, so their change is blank with "2006–2010: estimate is 0". The 2006–2010 count at `tract_2020` still has 136 values. The plan's "unless a 2010 count is blank or 0" covers it; recorded so Stop C checks 134.
+2. **`kat_007` is near 0** (3,805 ÷ 3,809 − 1 = −0.105%). It still tells start from end (swapped gives +0.105%, outside the 0.01 tolerance) and goes through the only in-city pair whose GEOIDs differ. Recommend keep.
+3. **Titles** name the unit, like the income tract specs: "Total population by census tract, 2006–2010" etc. The block group count keeps "Total population, 2020–2024". Recommend keep.
+4. **`population_count_tract_2010` caveats:** sample/MOE, controls of the time, matched by land area (people, not households), unmatched units blank, counts reflect size. Left out the income spec's coding and too-few-cases caveats, which don't apply to B01003.
 
 #### Decisions (expert, 2026-10-25)
 
@@ -376,3 +389,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4b requirements and design issues 1–7. Decisions 7–12: `percent_change`; no MOE for the change; breaks ±5/10/15 % (8 classes, `RdBu`); start and end in the tooltip; manifest caveats for the change Indicator only; `kat_005` by hand. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (inflation factor). Stop B after specs are drafted. |
 | 2026-10-25 | Chat | Wrote chunk 5 requirements into Current chunk: tract population 2006–2010 and 2020–2024 and their percent change on 2020 tracts (three Indicators, optional change map), design issues 1–3, Stop A questions 1–3, `kat_006`, `kat_007`, `inv_011`, `inv_012`. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 5 requirements and design issues 1–3. Decisions 3–5: change map with breaks ±5/10/15/20 % (10 classes, `RdBu`); counts through the 0.80 `matched` crosswalk accepted; `kat_006` and `kat_007` as recommended. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (source check). Stop B after specs are drafted. |
+| 2026-10-25 | Claude Code | Chunk 5 tasks 1–4: plan committed, branch created; source check passed (B01003 at tract level, 2010 and 2024); design issues 1–3 applied, existing outputs unchanged, `kat_001`–`kat_005` pass; three Indicators and the change map drafted; `kat_006` (3,809 ± 499), `kat_007` (−0.11), `inv_011`, `inv_012` added. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–4. Then task 5. |
