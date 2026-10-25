@@ -30,6 +30,11 @@ def load(spec: Spec, specs: dict[str, Spec], snaps: list[Snapshot] | None = None
         raise ValueError(f"{spec.id}: file has no coordinate system")
     gdf["geography_name"] = gdf[name_field].astype(str) if name_field else ""
     gdf["geography_id"] = gdf[id_field].astype(str)
+    if spec.meta.get("census_unit") and id_field == "GEO_ID":
+        # Census 2010 cartographic files: <summary level>US<GEOID>; keep the GEOID (§ 4.2).
+        if not gdf["geography_id"].str.contains("US", regex=False).all():
+            raise ValueError(f"{spec.id}: some GEO_ID values have no 'US' before the GEOID")
+        gdf["geography_id"] = gdf["geography_id"].str.split("US", n=1).str[1]
     gdf = gdf[["geography_id", "geography_name", "geometry"]]
     if gdf["geography_id"].duplicated().any():
         raise ValueError(f"{spec.id}: {id_field} is not unique")
