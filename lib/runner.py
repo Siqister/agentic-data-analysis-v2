@@ -295,8 +295,11 @@ def run_visualization(viz: Spec, specs: dict[str, Spec], force: bool = False) ->
     if viz.meta.get("map") == "hexbin":
         classes = heatmap.draw(viz.meta, output.read_points(table_path), geo, note, out)
     else:
-        classes = {"breaks": draw(viz.meta, ind.meta["measure"], ind.meta.get("unit", "count"),
-                                  output.read_table(table_path), geo, note, out)}
+        # A change map formats start and end by its inputs' unit (they share one, § 4.4).
+        unit_of = specs[ind.meta["builds_on"][0]] if ind.meta["measure"] == "percent_change" else ind
+        classes = {"breaks": draw(viz.meta, ind.meta["measure"], unit_of.meta.get("unit", "count"),
+                                  output.read_table(table_path), geo, note, out,
+                                  inflation="inflation" in ind.meta)}
     m = output.write_manifest(out, bf, data, ind_manifest["known_answer_tests"])
     m["indicator_output"] = {"path": ind_manifest["output"], "fingerprint": ind_manifest["fingerprint"]}
     m["classes"] = {"classification": viz.meta["classification"], **classes}

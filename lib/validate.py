@@ -141,6 +141,12 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
                 for k in ("data", "crosswalks", "reliability", "unit"):
                     if m.get(k):
                         err(f"{f} — a percent_change Indicator has no `{k}`")
+                inputs = [specs[d] for d in m.get("builds_on") or [] if d in specs]
+                units = {d.meta.get("unit") or "count" for d in inputs}
+                if len(units) > 1:
+                    err(f"{f} — its two builds_on Indicators have different units: {', '.join(sorted(units))}")
+                if "inflation" in m and units and units != {"dollars"}:
+                    err(f"{f} — `inflation` is only for inputs with `unit: dollars`")
             elif "inflation" in m:
                 err(f"{f} — only a percent_change Indicator has `inflation`")
             if "inflation" in m:

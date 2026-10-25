@@ -45,8 +45,9 @@ def _geojson(gdf: gpd.GeoDataFrame) -> dict:
 
 
 def draw(spec_meta: dict, measure: str, unit: str, table: pd.DataFrame, geo: gpd.GeoDataFrame,
-         source_note: str, out: Path) -> list[float]:
-    """Write the map. Returns the class breaks used."""
+         source_note: str, out: Path, inflation: bool = False) -> list[float]:
+    """Write the map. Returns the class breaks used. For a percent_change map, `unit` is the
+    inputs' unit, and `inflation` says whether the start is in end-year dollars."""
     t = table.drop(columns=["geography_name"], errors="ignore")
     merged = geo.merge(t, on="geography_id", how="left")
     if merged["estimate"].notna().sum() == 0:
@@ -72,7 +73,7 @@ def draw(spec_meta: dict, measure: str, unit: str, table: pd.DataFrame, geo: gpd
         config=json.dumps(config),
         # Only a percent_change map adds these, so other maps' pages are unchanged.
         change_format=CHANGE_FORMAT if change else "",
-        change_lines=CHANGE_LINES if change else "",
+        change_lines=_change_lines(unit, inflation) if change else "",
         data=json.dumps(_geojson(gpd.GeoDataFrame(merged, geometry="geometry", crs=geo.crs))),
     )
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -82,10 +83,19 @@ def draw(spec_meta: dict, measure: str, unit: str, table: pd.DataFrame, geo: gpd
 
 CHANGE_FORMAT = """
   : config.format === "signed_percent" ? (v => d3.format("+.1f")(v) + "%")"""
-CHANGE_LINES = """const dollars = v => v == null ? "no value" : d3.format("$,.0f")(v);
+CHANGE_LINES = """const {unit} = v => v == null ? "no value" : d3.format("{format}")(v);
     lines.splice(1, 3, "Change: " + (p.estimate == null ? "no value" : fmt(p.estimate)),
-      "Start, in end-year dollars: " + dollars(p.start), "End: " + dollars(p.end));
+      "{start}: " + {unit}(p.start), "End: " + {unit}(p.end));
     """
+INPUT_FORMATS = {"dollars": "$,.0f", "count": ",.0f"}
+
+
+def _change_lines(unit: str, inflation: bool) -> str:
+    """Tooltip lines for start and end, formatted by the inputs' unit."""
+    if unit not in INPUT_FORMATS:
+        raise ValueError(f"a change map of `unit: {unit}` inputs isn't built yet")
+    start = "Start, in end-year dollars" if inflation else "Start"
+    return CHANGE_LINES.format(unit=unit, format=INPUT_FORMATS[unit], start=start)
 
 TEMPLATE = """<!doctype html>
 <html lang="en">

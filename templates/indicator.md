@@ -38,7 +38,7 @@ window:                                      # (optional, points only) ISO dates
   field: OffenseDate                         # one of the data fields
   from: 2025-11-30
   to: 2026-09-30
-inflation:                                   # (optional, percent_change only) both values from the same table
+inflation:                                   # (optional, percent_change of dollars only) both values from the same table
   index: R-CPI-U-RS
   from: { year: 2010, value: 319.8 }
   to: { year: 2024, value: 462.511 }

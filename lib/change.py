@@ -27,7 +27,7 @@ def period(ind: Spec) -> str:
 def percent_change(start: pd.DataFrame, end: pd.DataFrame, factor: float,
                    labels: tuple[str, str]) -> pd.DataFrame:
     """One row per unit of `end`: estimate = (end ÷ (start × factor) − 1) × 100, moe blank,
-    start and start_moe in the end year's dollars, end and end_moe as published.
+    start and start_moe times the inflation factor (1 without `inflation`), end and end_moe as published.
 
     If either input is blank, so is the change, and `note` gives each blank input's period
     and note, start first, e.g. "2006–2010: no matching 2010 tract"."""
