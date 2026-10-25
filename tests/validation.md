@@ -148,4 +148,4 @@ The heading gives the test ID (`inv_001`, `inv_002`, …).
 
 ### When they run
 
-In author mode, when the runner, the agent's instructions, or the set of specs changes, and at least once per chunk. Each test starts from the **plain prompt, in a fresh agent session**: calling `lib.runner` directly tests the runner, not the agent. The expert (or a check of the working tree) confirms the behavior. A failure is a bug in the agent's instructions or the runner, not in an Indicator.
+In author mode, when the runner, the agent's instructions, or the set of specs changes, and at least once per chunk, **after the expert's approval**: the agent runs in run mode by default, so a `runs` test can only pass once its spec is `stable` and its code reviewed (chunk 4a). Each test starts from the **plain prompt, in a fresh agent session**: calling `lib.runner` directly tests the runner, not the agent. The expert (or a check of the working tree) confirms the behavior. A failure is a bug in the agent's instructions or the runner, not in an Indicator.

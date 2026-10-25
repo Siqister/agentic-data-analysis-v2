@@ -67,28 +67,33 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Staleness detection (code vs. results) (chunk 1)
 - ☑ Known-answer tests (chunk 1)
 - ☑ Run mode (chunk 1)
-- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24; `inv_001`–`inv_003` passed after approval in chunk 2; `inv_001`–`inv_005` in chunk 3)
+- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24; `inv_001`–`inv_003` passed after approval in chunk 2; `inv_001`–`inv_005` in chunk 3; `inv_001`–`inv_008` in chunk 4a)
 
 **Resources & geographies**
 - ☑ API resource (Census Data API) (chunk 1)
 - ☑ Local file resource (chunk 3: `cle_crime` GeoPackage, named fields only, offline field check)
+- ☑ File resource fetched by URL, delimited text (chunk 4a: tract relationship file, named columns only, offline column check against the snapshot)
+- ☑ Second vintage of an API dataset (chunk 4a: ACS 2006–2010 beside 2020–2024)
 - ☑ Point dataset (chunk 3: incident points, EPSG:3857 → 3734, clipped to a Geography)
 - ☑ Geography from Census boundary files (chunk 1: cartographic boundary file, fetched by URL)
 - ☑ Geography from a local file (chunk 1: city GeoPackage; neighborhoods not yet)
 - ☑ Geography selection rule (`within`, `majority_area`) (chunk 1)
-- ☑ Census request extent derived from the Geography (`census_unit`) (chunk 2)
+- ☑ Census request extent derived from the Geography (`census_unit`) (chunk 2; tracts in chunk 4a)
+- ☑ Tract Geography (`census_unit: tract`) (chunk 4a)
+- ☑ Geography on 2010 boundaries (`GEO_ID` read as the GEOID) (chunk 4a)
 
 **Indicators**
 - ☑ Count, with margin of error (chunk 1)
 - ☐ Percent or rate (counts first, then rate)
 - ☑ Reliability flag (chunk 1); suppress not yet
-- ☐ Median or other custom aggregation
+- ☑ Median or other custom aggregation (chunk 4a: a median through a `matched` crosswalk, `# Aggregation`)
 - ☐ Indicator that builds on other Indicators
 - ☑ Selection of points (`measure: points`, `window` in local dates) (chunk 3)
 - ☐ Point aggregation
 
 **Crosswalks**
 - ☑ `nested` (chunk 1: only `from.within == to` with one target unit)
+- ☑ `matched` (chunk 4a: 2010 → 2020 tracts, reciprocal land-area overlap, `min_overlap` 0.80)
 - ☐ `population_weighted`
 - ☐ `areal` / `centroid`
 
@@ -100,223 +105,10 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 ## Current chunk
 
-### Chunk 4a — 2010 tract median household income, matched to 2020 tracts
+### Chunk 4b — Change in tract median household income, 2010 → 2024 (planned)
 
-**Analysis question (chunks 4a + 4b):** how has median household income changed at the census tract level between 2010 (ACS 2006–2010) and 2024 (ACS 2020–2024)? 4a puts both medians on 2020 tracts. 4b computes the change.
+**Status:** go-ahead given at 4a's Stop C (2026-10-25). Requirements are being written in chat; until then, the outline below is all there is.
 
-**Why tracts:** the Census API has no 2006–2010 block group data ([Task 2 findings](#task-2-findings-2026-10-25)). Decision 10.
-
-**Brief:** the first tract Geographies, the first Indicator on an older boundary vintage, and the first crosswalk that can carry a median.
-- Two new Geographies, `tract_2010` and `tract_2020`.
-- A second ACS vintage (2006–2010) at tract level, and the 2020–2024 median at tract level.
-- A new crosswalk method, `matched`. It copies a value 1:1 from a 2010 tract to a 2020 tract only when their land areas overlap almost completely, both ways. Every other 2020 tract is blank, with a note.
-- Existing Census Indicators are renamed with their ACS end year (architecture.md § 4.4 *Vintages and change over time*).
-- **Go/no-go gate for 4b.** At Stop C, the expert sees how many 2020 tracts have both values, then decides whether 4b goes ahead.
-
-**Branch:** `chunk/04a-tract-2010-income` (renamed from `chunk/04a-bg-2010-income` in task 1b).
-
-**Status:** ✅ Stop A passed 2026-10-25 for the tract version: requirements and design issues 1–8 approved, Stop A question 1 answered (decision 11). ✅ Stop B passed 2026-10-25 (decision 12). Tasks 5–6 done. Expert approved 2026-10-25 (decision 13). 🛑 **Stop C, remaining:** the expert runs `inv_001`–`inv_008` in fresh sessions and decides on 4b.
-
-**Exercises (capability checklist):**
-- New items to add: tract Geography (`census_unit: tract`); file Resource fetched by URL (delimited text); a Geography on 2010 boundaries; `matched` crosswalk; a median moved through a crosswalk (`# Aggregation`).
-- *Indicator that builds on other Indicators* stays ☐ until 4b.
-
-_Place and unit words in this section are requirements. They do not go into the Indicator body (chunk 2, design issue 5)._
-
-#### Requirements
-
-**Specs to draft or change** (all `status: draft`)
-
-| ID | Type | Settings |
-|---|---|---|
-| `census_api` (changed) | Resource | Add `{ dataset: acs/acs5, vintage: 2010 }` to `datasets`. About: vintage 2010 is the 2006–2010 5-year estimate, on 2010 census geography, published down to tracts (block groups start at vintage 2013). Notes: anything about 2010 found in task 2 (annotation codes, coded values). |
-| `census_tract_relationship_2020_2010` | Resource | The Census Bureau's 2020 ↔ 2010 census tract relationship file, Ohio state file. A file Resource at a URL; no `auth`, no `datasets`. Body: About (publisher, URL, one row per 2020 × 2010 tract pair that overlaps), Schema (the GEOID and land-area fields used), Notes (land area only, from full-resolution TIGER; no population or housing counts; UTF-8 with BOM if, like the block group file, it has one). URL and field names confirmed in task 2. |
-| `tract_2010` | Geography | Census 2010 cartographic boundary file for Ohio tracts (1:500,000, the same kind as `bg_2020`); `id_field: GEO_ID`, read as the 11-digit tract GEOID (design issue 6); `within: cle_city`; `within_rule: majority_area`; `census_unit: tract`. |
-| `tract_2020` | Geography | Census 2020 cartographic boundary file for Ohio tracts (1:500,000); `id_field: GEOID`; `within: cle_city`; `within_rule: majority_area`; `census_unit: tract`. |
-| `tract_2010__to__tract_2020` | Crosswalk | `method: matched`; `weights_source: census_tract_relationship_2020_2010`; `min_overlap: 0.80` (decision 6). |
-| `median_household_income_tract_2010` | Indicator | `measure: median`; `unit: dollars`; `geography: tract_2010`; `crosswalks: [tract_2010__to__tract_2020]`; `data`: `census_api`, `acs/acs5` 2010, `B19013_001E` "Median household income in the past 12 months (in 2010 inflation-adjusted dollars)"; `reliability: { cv_threshold: 0.30, low: flag }`. Body follows `median_household_income_2024`, plus `# Aggregation`. |
-| `median_household_income_tract_2024` | Indicator | As `median_household_income_2024`, with `geography: tract_2020` and no crosswalks (design issue 8). |
-| `map_median_household_income_tract_2010__tract_2020` | Visualization | `indicator: median_household_income_tract_2010`; `geography: tract_2020`; `classification: quantile`; `classes: 5`; `colors: Greens` (decision 8). |
-| Renamed (design issue 1) | Indicator, Visualization | `population_count` → `population_count_2024`, `median_household_income` → `median_household_income_2024`, and their maps → `map_population_count_2024__bg_2020`, `map_median_household_income_2024__bg_2020`. Titles name the ACS period and the unit (e.g. "Median household income by block group, 2020–2024"), because the agent matches prompts against titles. |
-
-Used unchanged: `cle_city`, `bg_2020`, `bg_2020__to__cle_city`.
-
-**Matching rule** (Crosswalk body and `lib/crosswalk.py`)
-- For each pair of a 2010 tract *a* and a 2020 tract *b* in the relationship file, the shared land area is `AREALAND_PART`.
-- *a* and *b* **match** when the shared land area is at least `min_overlap` of *a*'s land area **and** at least `min_overlap` of *b*'s. With `min_overlap` above 0.5, each unit has at most one match.
-- A 2020 tract with a match takes its 2010 tract's `estimate`, `moe` and `note` unchanged.
-- A 2020 tract with no match, or whose match isn't in `tract_2010` (e.g. it straddles the city line differently), is blank, with `note` "no matching 2010 tract".
-- The build file `build/crosswalks/tract_2010__to__tract_2020.csv` lists every overlapping pair with both overlap shares and whether it matched, so the threshold can be reviewed and tuned at Stop C by editing frontmatter (no recompile).
-
-**Computation** (both new Indicator bodies, without place names): the same as `median_household_income_2024`.
-1. Annotations as in `census_api` § Notes.
-2. Top- and bottom-coded values blank, with the coded meaning in `note` (codes for 2010 confirmed in task 2).
-3. Otherwise, `estimate` and `moe` are the published values.
-
-**`# Aggregation`** (2010 Indicator body): a median can't be split or summed, so it moves only through a crosswalk that pairs units one to one. The value is the source unit's published median, unchanged; units without a pair are blank.
-
-**Caveats** (2010 Indicator `# Caveats`, without place names)
-- Values are in 2010 inflation-adjusted dollars. They are not comparable with later years until adjusted (chunk 4b).
-- The 2006–2010 estimates were controlled to the population estimates of the time, not to the 2010 census counts.
-- Through a matched crosswalk, a unit's value is its matched source unit's: their land areas differ by up to `1 − min_overlap`, and land area isn't the same as where households are.
-- Units with too few sample cases, coded values, or no match are blank.
-
-Geography caveat (`tract_2010` and `tract_2020` bodies): tracts are larger than block groups, so the majority-area rule moves more area in or out of the city at the boundary, and tract totals differ more from the city's exact boundary.
-
-**Outputs** (each with its manifest)
-- `outputs/tables/median_household_income_tract_2010__tract_2010.csv` and `…__tract_2020.csv`
-- `outputs/tables/median_household_income_tract_2024__tract_2020.csv`
-- `outputs/visualizations/map_median_household_income_tract_2010__tract_2020.html`
-- The renamed outputs of the four renamed specs. Values unchanged; the old files are removed from `outputs/`.
-- `build/crosswalks/tract_2010__to__tract_2020.csv` (not committed)
-
-**Go/no-go summary** (in Stop C's notes, from the build file and the tables; no new spec)
-- 2020 tracts with a 2010 match, at `min_overlap` 0.80, 0.90 and 0.95.
-- Of those, how many have both a 2010 and a 2020–2024 value, so a change can be computed in 4b.
-- The map, to see where the blanks fall.
-
-**Tests**
-- **Spec validation** passes for the whole project, including the checks from design issues 3, 4 and 8.
-- **`kat_003`** (exact): `median_household_income_tract_2010` at `tract_2020`, for a 2020 tract whose matched 2010 tract has a **different** GEOID if one exists, so the test covers the match and not only the fetch. Value from the Census API, confirmed by the expert.
-- **`kat_004`** (exact): `median_household_income_tract_2024` at `tract_2020`, one tract. Value from the Census API, confirmed by the expert.
-- `kat_001` and `kat_002` still pass under their renamed Indicators.
-- **Invocation:**
-  - `inv_002`, `inv_003`: specs renamed; prompts unchanged (they name block groups, so only one spec matches).
-  - `inv_006`, income map with no year or unit. Prompt: "Map median household income in Cleveland." Expected: `asks`: the agent asks which one, names the available years and units (2020–2024 by block group; 2006–2010 by tract), and runs nothing until answered (decision 7).
-  - `inv_007`, 2010 map. Prompt: "Map median household income in 2010 by census tract." Expected: `runs`, `spec: map_median_household_income_tract_2010__tract_2020`.
-  - `inv_008`, change isn't available yet. Prompt: "How has median household income changed by census tract since 2010?" Expected: `not_available`. The agent must not compare the tables outside a spec.
-  - Existing `inv_001`, `inv_004`, `inv_005` still pass.
-
-**Not in this chunk:** change or percent change, inflation adjustment, `builds_on`, diverging maps (all 4b); block groups for 2006–2010; household-weighted overlap; other vintages; a 2020–2024 tract map.
-
-#### Design issues
-
-Found by checking the requirements against architecture.md, AGENTS.md, validation.md, the templates and `lib/`. Proposed fixes:
-
-1. **Rename Census Indicators with their ACS end year** (§ 12 naming, already in architecture.md).
-   - Move the two Indicator specs and their compiled code; update the code's `# spec:` path. The spec hash is unchanged (the ID isn't in the text), but the code hash changes, so the expert re-verifies and results rerun.
-   - Rename both maps; update `indicator:`, `kat_001`, `kat_002`, `inv_002`, `inv_003` and the `index.md` files.
-   - Every edited `stable` spec goes back to `draft`. Outputs must be byte-identical apart from names and `created`.
-2. **Prompts that match several specs.** AGENTS.md rule 1 already says to ask. Extend it: when several match, ask which one, listing the matching specs and what tells them apart (e.g. the available years and units). Add `inv_006`.
-3. **`matched` crosswalk method** (§ 4.3 table, § 12 *Counts first*, Crosswalk template, validation.md, `lib/validate.py`):
-   - New method: pairs units one to one by reciprocal land-area overlap (rule above). New Crosswalk field `min_overlap` (above 0.5 and at most 1), required for `matched` only. `matched` requires `weights_source` (the relationship Resource) and has no `weights`.
-   - § 12: "Crosswalks move counts only, never percentages or medians", **except `matched`**, which copies a value unchanged. A `median` or `index` still needs `# Aggregation` to use it.
-4. **`lib/` for `matched`:**
-   - `crosswalk.build` reads the relationship file through a snapshot and writes the build file with both overlap shares.
-   - New `crosswalk.apply_matched` copies `estimate`, `moe` and `note`, and writes the "no matching" note.
-   - `runner.report` uses it for any `measure` when the method is `matched`; other methods still move counts only.
-5. **A file Resource at a URL, as delimited text** (§ 10 already allows a file at a URL). Snapshot the whole file once; read only the named columns, with GEOIDs as text and the BOM removed. The offline field check (validation.md) covers it.
-6. **GEOID for `tract_2010`.** The 2010 cartographic files have `GEO_ID` (`1400000US` + the 11-digit tract GEOID for tracts; confirmed for block groups in task 2). `lib/geography` reads a Census `GEO_ID` as its GEOID for a Geography with `census_unit`, documented in § 4.2. Not TIGER/Line: its shapes extend into Lake Erie, which would change the majority-area rule for lakeshore units.
-7. **Tract requests and 2010 data** (`lib/census`): check that `requests_for` handles `census_unit: tract` (unused so far) for vintages 2010 and 2024, and record 2010 annotation codes and coded values in `census_api` § Notes.
-8. **The same published value at a second Census unit** (§ 12 naming, § 4.4).
-   - A median can't move from block groups to tracts, so the tract median is pulled at tract level. That makes it a separate Indicator.
-   - Proposed naming: for a Census unit other than the block group, the ID puts the unit before the year: `median_household_income_tract_2024`, `median_household_income_tract_2010`. Block group stays unnamed, as the default unit.
-   - Alternative, not proposed for a proof of concept: an `# Aggregation` method "use the published value at the target unit" through a block group → tract crosswalk, so one Indicator covers both units. More general, more `lib/` work. Revisit if many measures need tracts.
-
-Proposed: apply 1–8 after task 2's checks, before drafting specs.
-
-#### Stop A questions
-
-Answered 2026-10-25. Block group version: decisions 5–9. Tract version: decision 11.
-
-#### Tasks
-
-1. ✅ Commit the chunk 4a plan on `main`, then create the branch. (Done 2026-10-25, as `chunk/04a-bg-2010-income`.)
-   - 1b. Rename the branch to `chunk/04a-tract-2010-income` and commit this rewrite and the task 2 findings.
-2. **Check the sources for tracts** (network needed). 🛑 **Stop and discuss if any check fails.**
-   - The Census API serves `acs/acs5` 2010 and 2024 `B19013_001E`/`_001M` at tract level for Cuyahoga County. Record the request syntax, annotation codes, and top- and bottom-coded values for 2010.
-   - The 2010 cartographic tract file for Ohio (expected `…/GENZ2010/gz_2010_39_140_00_500k.zip`): URL, fields, coordinate system.
-   - The 2020 cartographic tract file for Ohio (expected `…/GENZ2020/shp/cb_2020_39_tract_500k.zip`): URL, fields, coordinate system.
-   - The tract relationship file for Ohio (expected `…/rel2020/tract/tab20_tract20_tract10_st39.txt`): URL, fields, and the land-area columns.
-3. Apply design issues 1–8. Do the rename (issue 1) first and confirm outputs are unchanged and `kat_001`/`kat_002` pass.
-4. Draft the new specs, update `census_api` and each folder's `index.md`, and add `kat_003`, `kat_004` and `inv_006`–`inv_008`. 🛑 **Stop B.**
-5. Build the `lib/` changes (issues 3–7). Compile `pipeline/indicators/median_household_income_tract_2010.py` and `…_tract_2024.py`.
-6. Run validation, known-answer tests and invocation tests, and produce the outputs. Write the go/no-go summary. 🛑 **Stop C:** the expert reviews, sets `min_overlap`, and decides on 4b.
-7. Retro per the working method.
-
-#### Stop C notes (2026-10-25)
-
-**`lib/` changes (design issues 3–7; need the expert's review):**
-- `geography.load`: for a Geography with `census_unit` and `id_field: GEO_ID`, keeps the part after `US`.
-- `crosswalk`: `build` dispatches `matched` to new `build_matched` (reads the relationship file through a snapshot, writes the build file with `from_share`, `to_share`, `matched`, `from_in_geography`, `to_in_geography`, for pairs that touch either Geography; returns the matched pairs inside both; stops if a unit has two matches). New `read_delimited` (named columns only, all text, BOM removed, delimiter from the header). New `apply_matched` (copies `estimate`, `moe`, `note`; blank with "no matching 2010 tract" otherwise).
-- `runner.report`: a `matched` crosswalk uses `apply_matched` for any measure; the note label comes from the `from` Geography's boundary year and `census_unit`. The relationship snapshot goes into `data` in the manifest, and `min_overlap` into `built_from`.
-- `validate`: `matched` allowed; checks its fields (`weights_source`, `min_overlap` in (0.5, 1], the five `fields`, a `from` with `census_unit`, a file Resource as `weights_source`); offline check that `fields` columns exist in the snapshotted file.
-- `census.requests_for` needed no change: tract requests work for vintages 2010 and 2024.
-
-**Compiled code (unreviewed):** `median_household_income_tract_2010.py` and `median_household_income_tract_2024.py`. Their `# Computation` is word-for-word the same as `median_household_income_2024`'s, so the body is the reviewed 2024 code (the 2010 docstring also mentions the matched crosswalk). Also to re-verify: `population_count_2024.py`, `median_household_income_2024.py` (headers only changed).
-
-**Results:**
-- Validation: 0 errors offline and with `--network`; the official labels of all four field codes match the specs. Remaining warnings: unreviewed code and `draft` specs.
-- Known-answer tests: `kat_001`, `kat_002`, `kat_003`, `kat_004` pass (the last three exact).
-- Existing outputs: after the `lib/` changes, the five renamed outputs and the crime heat map are byte-identical to the pre-chunk files.
-- Matched values: in all 136 matched pairs, the 2020 tract's `estimate`, `moe`, `note`, `cv` and `reliability` equal its 2010 tract's.
-- New outputs: `outputs/tables/median_household_income_tract_2010__tract_2010.csv` (177 tracts), `…__tract_2020.csv` (159), `outputs/tables/median_household_income_tract_2024__tract_2020.csv` (159), `outputs/visualizations/map_median_household_income_tract_2010__tract_2020.html`, and `build/crosswalks/tract_2010__to__tract_2020.csv`.
-
-**Go/no-go summary for 4b** (159 2020 tracts in the city; 177 2010 tracts):
-
-| `min_overlap` | 2020 tracts matched | matched, but 2010 tract not in `tract_2010` | with a 2010 value | with both a 2010 and a 2020–2024 value |
-|---|---|---|---|---|
-| 0.80 | 136 (86%) | 0 | 134 | 130 (82%) |
-| 0.90 | 134 (84%) | 0 | 132 | 128 (81%) |
-| 0.95 | 131 (82%) | 0 | 129 | 125 (79%) |
-
-At 0.80: 23 2020 tracts have no match; 2 matched tracts have no 2010 value (too few sample cases); 8 tracts have no 2020–2024 value (too few sample cases). No 2010 or 2020–2024 tract in the city is top- or bottom-coded. At 0.90 or above, `kat_003`'s tract no longer matches (its overlap is 83.1%), so the test would need replacing. The map shows where the blanks fall.
-
-#### Stop B notes (2026-10-25)
-
-**Task 3 done.** Rename (design issue 1): the four specs and two code files moved, titles name the ACS period, all four back to `draft`. The titles changed the spec hashes, so both code headers were regenerated (body unchanged, no `verified` line): **the expert re-verifies `population_count_2024` and `median_household_income_2024`.** The five renamed tables and maps are byte-identical to the old ones; `kat_001` and `kat_002` pass. Design issues 2–8 written into AGENTS.md rule 1, architecture.md §§ 2, 4, 4.2, 4.3 (new *matched* subsection), 4.4, 7, 10, 12, 13, the Crosswalk and Geography templates, and validation.md. `lib/` is task 5.
-
-**Task 4 drafts** (all `draft`): `census_api` (vintage 2010 added; About and Notes for 2010; back to `draft`), `census_tract_relationship_2020_2010`, `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020`, `median_household_income_tract_2010`, `median_household_income_tract_2024`, `map_median_household_income_tract_2010__tract_2020`; every `index.md`; `kat_003`, `kat_004`, `inv_006`–`inv_008`. Validation now has 4 errors, all expected until task 5: `matched` isn't a known method yet, and the two new Indicators have no compiled code. With `--network`: the official labels of all three `B19013_001E` fields match the specs. The publication check for `median_household_income_tract_2010` can't run until `lib/` reads `GEO_ID` (task 5). Other publication and `variables.json` checks failed only intermittently, because the Census API was timing out on 2026-10-25; the direct requests in task 2 show both vintages are published at tract level. Rerun at Stop C.
-
-**Questions for the expert**
-
-1. **`fields` on a `matched` Crosswalk (new, not in the approved design).** The builder has to know which relationship-file columns to read, and the tract and block group files name them differently (`GEOID_TRACT_20` vs `GEOID_BLKGRP_20`). Proposed: the Crosswalk names them in `fields: { from_id, to_id, from_area, to_area, shared_area }`, which keeps rule 3 (fields are named in an Indicator or Crosswalk) and lets the offline field check cover them. Alternative: `lib/` derives them from the `census_unit`; less to write, but hidden.
-2. **Title of `population_count_2024`:** "Total population, 2020–2024", without "by block group", because it's also reported for the city. The income Indicators name their unit.
-3. **Name fields:** `tract_2020` uses `NAMELSAD` ("Census Tract 1114.01"); `tract_2010` uses `NAME` ("1114.01"; the 2010 file has no `NAMELSAD`). Only the 2020 names appear on the map.
-4. **`kat_003`:** in the city, only one matched 2020 tract has a different GEOID from its 2010 tract: `39035197400` ← `39035106300`, overlap 99.99% / 83.1%. It only matches at `min_overlap` below 0.83, so it has to be replaced if the threshold goes up. Expected values for `kat_003` (36591 ± 5794) and `kat_004` (38083 ± 13217) were read by the agent from the Census API; please confirm.
-5. **Early look for the go/no-go** (from the agent's checks of the source files, not from the pipeline; the formal summary is at Stop C): about 159 2020 tracts and 177 2010 tracts are inside the city by the majority-area rule, and about 136 2020 tracts match at 0.80.
-
-#### Task 2 findings (2026-10-25)
-
-1. ❌ **Census API, `acs/acs5` 2010, block groups: not served.** `geography.json` for vintages 2009–2012 lists `tract` but not `block group`. A block group request returns HTTP 400 "unknown/unsupported geography hierarchy", with `in=tract:*` or a single tract. Block groups start at vintage 2013 (2009–2013). The field exists: `B19013_001E` "Median household income in the past 12 months (in 2010 inflation-adjusted dollars)", with attributes `_001EA`, `_001M`, `_001MA`. Annotation and coded values for 2010 were not checked, since there was no block group data to check.
-2. ✅ **2010 cartographic block groups, Ohio.** `https://www2.census.gov/geo/tiger/GENZ2010/gz_2010_39_150_00_500k.zip`: 9,234 block groups, EPSG:4269. Fields `GEO_ID` (`1500000US` + 12-digit GEOID; design issue 6 confirmed), `STATE`, `COUNTY`, `TRACT`, `BLKGRP`, `NAME`, `LSAD`, `CENSUSAREA`.
-3. ✅ **Relationship file, Ohio.** `https://www2.census.gov/geo/docs/maps-data/data/rel2020/blkgrp/tab20_blkgrp20_blkgrp10_st39.txt`: pipe-delimited, UTF-8 with BOM, 12,710 pairs (1,996 with a Cuyahoga 2020 block group). Fields used: `GEOID_BLKGRP_20`, `GEOID_BLKGRP_10`, `AREALAND_BLKGRP_20`, `AREALAND_BLKGRP_10`, `AREALAND_PART`. No blank GEOIDs.
-4. **Alternatives for 2006–2010 block group data** (each one needs the expert):
-   - **Census Bureau ACS 2006–2010 summary file**, Ohio, `Tracts_Block_Groups_Only` (`https://www2.census.gov/acs2010_5yr/summaryfile/…/Ohio/Tracts_Block_Groups_Only/`). Same publisher as the API. Zipped sequence files plus a geography file and a sequence-to-table lookup: a new file Resource, with more parsing than the relationship file.
-   - **NHGIS** (the roadmap's fallback): the same data, cleaner extracts, but needs an account and a manual or API extract. A new Resource.
-   - **Vintage 2013 (2009–2013) from the API**, on 2010 block groups. It doesn't overlap 2020–2024, so a comparison is still allowed, but it changes decision 5 and the analysis question.
-   - **Tracts, 2006–2010, from the API.** Changes the geography for 4a and 4b (decision 3 named tracts as a fallback).
-
-**Resolved:** the expert chose tracts (decision 10). Items 2–3 (block group files) are no longer used.
-
-**Tract checks (2026-10-25): all pass.**
-
-5. ✅ **Census API, tracts, vintages 2010 and 2024.** `for=tract:*&in=state:39&in=county:035` returns HTTP 200 for both; a county list (`county:035,093`) works too. Cuyahoga: 447 tracts (2010), 428 (2024). Same field codes in both vintages.
-   - **2010 annotation and coded values match 2024's.** Annotations seen: estimate `-666666666` with MOE `-222222222` (too few sample cases). Coded values: `2499` (bottom-coded) and `250001` (top-coded), each with MOE `-333333333`. In Cuyahoga 2010, 4 annotated and none coded. Coded values confirmed from Ohio, New York, California and New Jersey 2010 tracts. 2024 Cuyahoga: 13 annotated, 2 top-coded.
-6. ✅ **2010 cartographic tracts, Ohio.** `https://www2.census.gov/geo/tiger/GENZ2010/gz_2010_39_140_00_500k.zip`: 2,948 tracts, EPSG:4269. Fields `GEO_ID` (all `1400000US` + 11 digits; design issue 6 holds), `STATE`, `COUNTY`, `TRACT`, `NAME` (tract number, e.g. `1114.01`), `LSAD`, `CENSUSAREA`.
-7. ✅ **2020 cartographic tracts, Ohio.** `https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_39_tract_500k.zip`: 3,162 tracts, EPSG:4269. Fields include `GEOID` (11 digits), `NAME` (tract number), `NAMELSAD`, `ALAND`, `AWATER`.
-8. ✅ **Tract relationship file, Ohio.** `https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_st39.txt`: pipe-delimited, UTF-8 with BOM, 4,301 pairs (631 with a Cuyahoga 2020 tract). Fields used: `GEOID_TRACT_20`, `GEOID_TRACT_10`, `AREALAND_TRACT_20`, `AREALAND_TRACT_10`, `AREALAND_PART`. No blank GEOIDs.
-9. **Joins.** API tract GEOIDs (state + county + tract) match the boundary IDs, except tract `39035990000` (Lake Erie, water only, annotated in both vintages), which isn't in either cartographic file. The relationship file rows whose IDs aren't in the boundary files are water-only tracts (`…99xxxx`, land area 0) and one Ohio–Pennsylvania pair. **For `lib/`:** units with zero land area can't have an overlap share, so they never match (no division by zero).
-
-#### Decisions (expert, 2026-10-25)
-
-1. **Approach A:** each vintage is its own Indicator, and the year is never a run-time parameter. Recorded in architecture.md § 4.4 *Vintages and change over time*, §§ 4.1, 12, 13.
-2. **Split chunk 4** into 4a (this chunk) and 4b (below). 4b is written in detail after 4a's retro.
-3. **Boundary match:** one to one, with units that don't match left blank with a note (compute with flagged uncertainty). If too few units match, rethink or stop.
-4. **Accepted caveats:** coded values that don't line up across years after adjustment; possible differences in 2010 annotation codes; 2006–2010 controls to population estimates, not census counts.
-5. **"2010" is the ACS 2006–2010 5-year estimate**, compared with 2020–2024 in 4b. The periods don't overlap, as the Census Bureau requires for comparing 5-year estimates.
-6. **Overlap source: the Census relationship file** (land area from full-resolution TIGER), not an intersection of the cartographic files, whose 1:500,000 shapes are generalized differently in each vintage. **`min_overlap` starts at 0.80**, tuned at Stop C.
-7. **A prompt that matches several specs:** the agent asks which one and names what tells them apart, e.g. the available years and units (AGENTS.md rule 1, design issue 2). No default to the latest.
-8. **2010 map included:** `Greens`, quantile, 5 classes. Its classes aren't comparable with the 2024 maps' (different dollars, different units).
-9. **`population_count` is renamed too** (`population_count_2024`), so every Census Indicator follows one naming rule.
-10. **Tracts, not block groups** (after task 2): the Census API has no 2006–2010 block group data. Chunk 4 uses ACS 2006–2010 tracts from the API, on 2010 tracts matched to 2020 tracts. Not chosen: the 2006–2010 summary file, NHGIS, or 2009–2013 block groups.
-11. **Naming for a second Census unit:** the unit goes before the year, e.g. `median_household_income_tract_2024`; block group stays unnamed as the default unit (design issue 8). The `# Aggregation` alternative (published value at the target unit) is not built now; revisit if many measures need tracts.
-12. **Stop B (2026-10-25):** drafted specs approved for compiling. Stop B questions 1–5 accepted: `fields` on `matched` crosswalks; "Total population, 2020–2024"; `NAMELSAD` / `NAME`; `kat_003` (36591 ± 5794) and `kat_004` (38083 ± 13217) confirmed. Specs stay `draft` until Stop C.
-13. **Stop C approval (2026-10-25):** `lib/` changes and the four code files reviewed; all 12 chunk specs set `stable`, the four code files `verified`. `min_overlap` stays 0.80. Earlier runs of `inv_007` (blocked: specs were still `draft`, so run mode refused; the right behavior, rerun after approval) and `inv_008` (pass) came before approval.
-
-### Chunk 4b — Change in tract median household income, 2010 → 2024 (planned; detailed after 4a's retro)
-
-Only if 4a's go/no-go says so.
 - `median_household_income_tract_pct_change_2010_2024` at `tract_2020`: `builds_on` `median_household_income_tract_2010` (reported at `tract_2020` through the matched crosswalk) and `median_household_income_tract_2024`. New `measure: change`; the change math in a `lib/` helper; first runner support for `builds_on`.
 - **Inflation:** R-CPI-U-RS (the index the Census Bureau uses for ACS), 2024 annual average ÷ 2010 annual average (320.4), written in the change Indicator's spec with its source. An expert-approved exception to AGENTS.md rule 3 (no Resource for one constant). Read the 2024 value from BLS's current file (BLS reissued the series with corrections in April 2026).
 - **Proof of concept:** no significance test. Caveats go in the manifest (a new manifest field), e.g. that MOEs are large and some changes may not be statistically significant.
@@ -326,6 +118,22 @@ Only if 4a's go/no-go says so.
 ---
 
 ## Completed chunks
+
+### Chunk 4a — 2010 tract median household income, matched to 2020 tracts   (merged 2026-10-25)
+Delivered:
+  - Specs (all `stable`): `census_api` (vintage 2010 added), `census_tract_relationship_2020_2010` (file Resource at a URL), `tract_2010` (`id_field: GEO_ID`), `tract_2020`, `tract_2010__to__tract_2020` (`method: matched`, `min_overlap: 0.80`, `fields`), `median_household_income_tract_2010` (with `# Aggregation`), `median_household_income_tract_2024`, `map_median_household_income_tract_2010__tract_2020` (quantile, 5, `Greens`). Renamed with the ACS end year: `population_count_2024`, `median_household_income_2024` and their maps.
+  - Code (all verified): `median_household_income_tract_2010.py`, `median_household_income_tract_2024.py` (same body as the reviewed 2024 code); renamed `population_count_2024.py`, `median_household_income_2024.py` (new headers). `lib/`: `geography` reads `GEO_ID`; `crosswalk` gains `build_matched`, `apply_matched` and `read_delimited`; `runner.report` routes `matched` for any measure, records the relationship snapshot and `min_overlap`; `validate` checks `matched` and its columns offline.
+  - Outputs: the 2006–2010 tables at `tract_2010` (177) and `tract_2020` (159), the 2020–2024 table at `tract_2020` (159), the 2010 map, and the build file. Go/no-go at 0.80: 136 of 159 2020 tracts matched; 130 have both values.
+  - Tests: `kat_003` (exact, the one matched pair in the city whose GEOIDs differ) and `kat_004` (exact) added; `kat_001`–`kat_004` pass. `inv_002`, `inv_003` renamed; `inv_006`–`inv_008` added; `inv_001`–`inv_008` passed in fresh sessions after approval.
+Retro:
+  - Worked: the rename left all outputs byte-identical, and so did the `lib/` changes, for every existing output including the heat map. A new crosswalk method, a second vintage and tract Geographies fitted the graph, staleness and manifests with no change to `specs.py`, `compiled.py`, `snapshot.py` or `census.py`. Every matched value equals its source unit's. The two-step plan (4a measures the match, the expert decides on 4b) gave a go/no-go on numbers, not guesses.
+  - Broke: **the plan assumed the Census API had 2006–2010 block groups; it doesn't** (block groups start at vintage 2013). Task 2 caught it before anything was built, and the chunk was redrafted for tracts in chat (decision 10). Design issue 7 had guessed at a smaller difference (request syntax). The Census API timed out intermittently during network validation; reruns passed. The publication check couldn't run for a `GEO_ID` Geography until `lib/` read it. `inv_007`'s first run came before approval, so run mode refused it (correctly); validation.md now says to run invocation tests after approval.
+  - Agent needed correction on: nothing the expert raised. Beyond the plan, the agent proposed `fields` on `matched` crosswalks (approved at Stop B), added validator checks (`from` needs a `census_unit`; `weights_source` must be a file Resource), extra build-file columns (`from_in_geography`, `to_in_geography`), and the "no matching 2010 tract" label derived from the Geography's ID and `census_unit`. Putting the period in the titles changed the spec hashes, which the plan hadn't expected, so the renamed code needed re-verification; the agent said so. It didn't take "ok to all" at Stop B as code verification. It also force-reran outputs after approval so manifests record `stable` and `verified` (a `verified` line alone doesn't make results stale).
+  - Open points: `kat_003` breaks if `min_overlap` goes above 0.83 (the only in-city pair whose GEOIDs differ). The "no matching" label depends on the § 12 naming of the `from` Geography. No 2020–2024 tract map (out of scope). Overlap is land area, not households (accepted).
+Design changes:
+  - Before building (design issues 1–8): AGENTS.md rule 1 (ask which one and name what tells them apart); architecture.md § 2 (same), § 4 (Crosswalk fields), § 4.2 (`GEO_ID`; cartographic files, not TIGER/Line), § 4.3 (`matched`, new subsection; the counts-only rule's exception), § 4.4 (unit before year; ACS geography by vintage), §§ 7, 10 (delimited text), 12 (naming, medians), 13 (*Published values at other units*); Crosswalk and Geography templates; validation.md (`matched` checks, offline column check, tract sample request).
+  - In the retro: validation.md, invocation tests run after approval.
+  - Existing work brought in line: the four renamed specs and two code files, `kat_001`, `kat_002`, `inv_002`, `inv_003`, the index files; `census_api` updated. Validation clean with no warnings.
 
 ### Chunk 3 — Spatial distribution of reported crime incidents   (merged 2026-10-24)
 Delivered:
@@ -443,5 +251,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | Task 3: rename done (outputs byte-identical, `kat_001`/`kat_002` pass; code needs re-verification); design issues 2–8 in docs. Task 4: specs, indexes, `kat_003`, `kat_004`, `inv_006`–`inv_008` drafted. Proposed `fields` on `matched` crosswalks. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–5. Then task 5 (`lib/`, compile). |
 | 2026-10-25 | Claude Code | Stop B passed (decision 12). Task 5: `lib/` for `matched`, `GEO_ID`, delimited files, validation; both tract Indicators compiled. Task 6: validation clean (also `--network`), `kat_001`–`kat_004` pass, existing outputs byte-identical, new tables and map written, go/no-go summary (130 of 159 2020 tracts have both values at 0.80). | 🛑 Stop C: expert reviews `lib/` and code, sets `min_overlap`, decides on 4b, runs `inv_001`–`inv_008`, approves. Then task 7 (retro). |
 | 2026-10-25 | Claude Code | Expert approved: 12 specs `stable`, 4 code files `verified`, `min_overlap` 0.80. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the 2010 map; `kat_001`–`kat_004` pass. | 🛑 Expert runs `inv_001`–`inv_008` in fresh sessions; decides on 4b. Then task 7 (retro). |
+| 2026-10-25 | Claude Code | Expert ran `inv_001`–`inv_008` in fresh sessions: all pass. 4b goes ahead. Task 7: retro recorded, checklist updated (URL file Resource, second vintage, tracts, 2010 boundaries, median aggregation, `matched`), validation.md (invocation tests after approval), `chunk/04a-tract-2010-income` merged into `main`. | Write 4b requirements in chat, into Current chunk. |
 | 2026-10-25 | Chat | Expert chose tracts after task 2 (decision 10). Rewrote chunks 4a and 4b for tracts: `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020` (`matched`, 0.80), `median_household_income_tract_2010` and `…_tract_2024`, 2010 tract map; design issue 8 (naming for a second Census unit); `kat_004`; `inv_006`–`inv_008` reworded. | 🛑 Stop A again (tract version, Stop A question 1). Then Claude Code: task 1b, task 2 for tracts. |
 | 2026-10-25 | Chat | ✅ Stop A passed for the tract version: expert approved chunk 4a (tracts) requirements and design issues 1–8. Decision 11: `<measure>_tract_<year>` naming. | Claude Code: task 1b (rename the branch to `chunk/04a-tract-2010-income`, commit), then task 2 for tracts. Stop B after specs are drafted. |
