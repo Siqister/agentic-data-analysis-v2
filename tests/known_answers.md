@@ -60,3 +60,16 @@ source: ACS 2020–2024 5-year, B19013_001, Census Tract 1985, Cuyahoga County, 
 ```
 
 Value proposed by the agent from the Census Data API (`acs/acs5` 2024, `B19013_001E` and `_001M`, tract `198500`), chosen as the tract nearest the middle of Cleveland's tract values with a published, uncoded estimate and MOE. Awaiting the expert's confirmation. The value is passed through unchanged, so this tests the tract fetch, the GEOID join and the output.
+
+## kat_005 — Change in median household income, one matched tract
+
+```yaml
+indicator: median_household_income_tract_pct_change_2010_2024
+geography: tract_2020
+unit: "39035197400"              # Census Tract 1974 (2020), matched to 2010 Census Tract 1063; the kat_003 tract
+expected: -17.02
+tolerance: absolute 0.01
+source: Computed by hand from median_household_income_tract_2010__tract_2020.csv (36591) and median_household_income_tract_2024__tract_2020.csv (43913), factor 462.511 ÷ 319.8 (2026-10-25)
+```
+
+**Not a trusted published value** (decision 12, chunk 4b; an accepted exception to [validation.md § 2](validation.md#2-known-answer-tests)). It checks the joins, the order of start and end, and the arithmetic, not the inflation factor: 43913 ÷ (36591 × 462.511 ÷ 319.8) − 1 = −17.0197%. The start comes through the matched crosswalk, so the test covers that path too. If `min_overlap` rises above 0.83, this tract has no value and the test must be replaced, like `kat_003`.

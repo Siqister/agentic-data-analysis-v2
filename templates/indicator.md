@@ -9,7 +9,7 @@ description: Share of households spending 30% or more of income on housing costs
 status: draft                                # draft | stable (only the expert sets stable)
 tags: [housing]                              # (optional)
 
-measure: percent                             # percent | rate | count | median | index | points
+measure: percent                             # percent | rate | count | median | index | points | percent_change
 unit: count                                  # (optional) count (default) | dollars; for display only; not for points
 geography: bg_2020                           # calculated (and reported) here; for points, the clip extent
 crosswalks:                                  # (optional) also reported at each crosswalk's target; not for points
@@ -17,7 +17,7 @@ crosswalks:                                  # (optional) also reported at each 
   - bg_2020__to__cle_neighborhoods
   - bg_2020__to__cle_city
 
-data:                                        # exactly what to pull, and from where (file Resource: resource + fields only)
+data:                                        # (optional with builds_on) exactly what to pull, and from where (file Resource: resource + fields only)
   - resource: census_api
     dataset: acs/acs5                        # must be on the Resource's approved list
     vintage: 2023
@@ -30,7 +30,7 @@ data:                                        # exactly what to pull, and from wh
       B25070_011E: Not computed
       # … plus the owner-cost fields from B25091 (example only — not vetted)
 
-builds_on: []                                # (optional) other Indicators this one uses
+builds_on: []                                # (optional) other Indicators this one uses, reported at its geography; percent_change: [start, end]
 reliability:                                 # (optional) survey data only; not for points
   cv_threshold: 0.30                         # CV above this = low reliability
   low: flag                                  # flag (keep and mark) | suppress (leave blank)
@@ -38,6 +38,12 @@ window:                                      # (optional, points only) ISO dates
   field: OffenseDate                         # one of the data fields
   from: 2025-11-30
   to: 2026-09-30
+inflation:                                   # (optional, percent_change only) both values from the same table
+  index: R-CPI-U-RS
+  from: { year: 2010, value: 319.8 }
+  to: { year: 2024, value: 462.511 }
+  source: https://www.bls.gov/cpi/research-series/r-cpi-u-rs-allitems.xlsx
+  retrieved: 2026-10-25
 ---
 
 <!-- The body is about the measure, not the place: no place names, unit types, or Geography or

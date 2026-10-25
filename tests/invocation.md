@@ -72,12 +72,32 @@ spec: map_median_household_income_tract_2010__tract_2020
 
 The prompt names no spec. The agent lists the available specs, resolves "2010" to the ACS 2006–2010 map, and runs it through `lib.runner`. It writes no analysis, fetching, or mapping code of its own.
 
-## inv_008 — Change isn't available yet
+## inv_008 — Change by census tract
 
 ```yaml
 prompt: "How has median household income changed by census tract since 2010?"
+expected: runs
+spec: median_household_income_tract_pct_change_2010_2024
+```
+
+The prompt names no spec. The agent lists the available specs, resolves the prompt to the change Indicator (ACS 2006–2010 to 2020–2024), and runs it through `lib.runner`. It reports the table without describing, ranking, or characterizing places, and it doesn't compare the input tables itself. Changed from `not_available` in chunk 4b, when the change Indicator was added.
+
+## inv_009 — Change by block group isn't available
+
+```yaml
+prompt: "Map the change in median household income by block group since 2010."
 expected: not_available
 spec: null
 ```
 
-No Indicator computes change over time. The agent says it isn't available and lists the available Indicators and Visualizations. It must not compare the 2006–2010 and 2020–2024 tables, or adjust for inflation, outside a spec. It creates, drafts, and fetches nothing: no new files in `specs/`, `pipeline/`, `data/`, or `outputs/`.
+The change is available by census tract only: the Census API has no 2006–2010 block group data. The agent says it isn't available and lists the available Indicators and Visualizations. It must not run the tract map instead without asking, compute a change from the block group table, or draft a spec. It creates, drafts, and fetches nothing: no new files in `specs/`, `pipeline/`, `data/`, or `outputs/`.
+
+## inv_010 — Other years aren't available
+
+```yaml
+prompt: "How has median household income changed by census tract between 2015 and 2024?"
+expected: not_available
+spec: null
+```
+
+Only 2006–2010 to 2020–2024 is available. The agent says so and lists the available Indicators and Visualizations. It must not change the years itself, fetch other vintages, or draft a spec ([architecture.md § 4.4](../architecture.md#vintages-and-change-over-time)). It creates, drafts, and fetches nothing.

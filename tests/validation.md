@@ -36,6 +36,9 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] **Indicator:** a `points` measure has no `crosswalks`, `reliability` or `unit`, and has a `# Point rules` section. Only a `points` measure has a `window`.
 - [ ] **Indicator:** `window` has `field`, `from` and `to`; `field` is one of its `data` fields; `from` and `to` are dates and `from` ≤ `to`.
 - [ ] **Indicator:** a `median` or `index` measure that has crosswalks has an `# Aggregation` section.
+- [ ] **Indicator:** has `data`, `builds_on`, or both. Every `builds_on` Indicator is reported at this Indicator's `geography`.
+- [ ] **Indicator:** a `percent_change` measure has exactly two `builds_on` Indicators (start, then end), and no `data`, `crosswalks`, `reliability` or `unit`. Only a `percent_change` measure has `inflation`.
+- [ ] **Indicator:** `inflation` has `index`, `source`, `retrieved` (a date), and `from` and `to`, each with a `year` and a positive `value`; `from.year` is before `to.year`.
 - [ ] **Visualization:** `geography` is the Indicator's geography or the target of one of its crosswalks. With `manual` classification, `breaks` has `classes − 1` values in increasing order.
 - [ ] **Visualization:** a `choropleth` (the default) has a non-`points` Indicator and no `hex_size_m`. A `hexbin` has a `points` Indicator, no `also_show`, and `hex_size_m` of at least 250 (the privacy floor, [architecture.md § 12](../architecture.md#privacy)).
 - [ ] **Indexes:** each folder's `index.md` lists exactly the specs in that folder. `specs/index.md` declares `okf_version: "0.2"`.

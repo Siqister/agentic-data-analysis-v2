@@ -17,6 +17,7 @@ POINTS = ROOT / "build" / "points"   # selections: intermediate, never published
 
 COLUMNS = ["geography_id", "geography_name", "estimate", "moe", "cv", "reliability"]
 RATE_COLUMNS = ["numerator", "numerator_moe", "denominator", "denominator_moe"]
+CHANGE_COLUMNS = ["start", "start_moe", "end", "end_moe"]   # percent_change only
 
 
 def manifest_path(output: Path) -> Path:
@@ -50,7 +51,7 @@ def write_manifest(output: Path, built_from: list[dict], data: list[dict], tests
 
 def write_table(table: pd.DataFrame, path: Path, built_from, data, tests) -> dict:
     """CSV with the standard columns (§ 12). Values at full precision; blanks stay blank."""
-    cols = COLUMNS + [c for c in RATE_COLUMNS if c in table.columns] + ["note"]
+    cols = COLUMNS + [c for c in RATE_COLUMNS + CHANGE_COLUMNS if c in table.columns] + ["note"]
     path.parent.mkdir(parents=True, exist_ok=True)
     table[cols].to_csv(path, index=False)
     return write_manifest(path, built_from, data, tests)
@@ -74,7 +75,7 @@ def read_points(path: Path) -> gpd.GeoDataFrame:
 def read_table(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, dtype={"geography_id": str, "geography_name": str, "note": str,
                                     "reliability": str}, keep_default_na=False,
-                       na_values={c: [""] for c in ["estimate", "moe", "cv", *RATE_COLUMNS]})
+                       na_values={c: [""] for c in ["estimate", "moe", "cv", *RATE_COLUMNS, *CHANGE_COLUMNS]})
 
 
 def stale_reason(output: Path, built_from: list[dict]) -> str | None:
