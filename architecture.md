@@ -144,7 +144,7 @@ Test for an Indicator: changing its `geography` or `crosswalks` must not require
 > **A Resource tells you how to get data from somewhere. An Indicator tells you exactly what to pull and how to use it.**
 
 - **One Resource = one API, one file, or one dataset.** The whole Census Data API is a single Resource (`census_api`). Its spec explains how to use the API. Which tables and fields to pull is a methodology choice, so that belongs in each Indicator.
-- **APIs list their approved datasets.** `datasets` is the short, expert-controlled list of dataset + vintage combinations that Indicators may use, e.g. `acs/acs5` 2023. This keeps every Indicator on the same survey release.
+- **APIs list their approved datasets.** `datasets` is the short, expert-controlled list of dataset + vintage combinations that Indicators may use, e.g. `acs/acs5` 2023. This keeps Indicators on releases the expert chose. A second vintage is added only for a comparison over time ([§ 4.4](#vintages-and-change-over-time)).
 - **Borderline case, data portals** (e.g. Cleveland Open Data). Use this test:
   - *If choosing what to pull from it is a methodology decision* → one Resource (like the Census API).
   - *If deciding whether to trust it is itself a decision* → one Resource per dataset.
@@ -204,11 +204,20 @@ One measure, such as "% of households with housing cost burden", or a reviewed s
 - **Body:** `# Definition` (universe, numerator, denominator, exclusions), `# Computation` (steps), `# Caveats`. Add `# Point rules` for point data: outside-city points, boundary points, accepted geocodes, and denominator.
 - **The body is about the measure, not the place** ([Separation of concerns](#separation-of-concerns)). Steps that are the same for every Indicator are done by `lib/` and aren't repeated: pulling the fields for the geography's units, joining them to the units (§ 12), applying the listed crosswalks, and computing reliability at every geography. The compiled code returns one table at the Indicator's `geography`; the runner does the rest.
 
+#### Vintages and change over time
+
+One Indicator has one vintage, fixed in its `data`. The year is **never a run-time parameter**: it decides the Geography (ACS 2011–2019 is published on 2010 block groups, 2020 onward on 2020 ones), the crosswalks, and sometimes the field codes, and those are reviewed parts of the graph. Rejected: one Indicator whose year is taken from the prompt (unreviewed combinations, colliding outputs). Decided in chunk 4.
+
+- **Each vintage is its own Indicator**, with the ACS end year at the end of its ID ([§ 12](#naming)), e.g. `median_household_income_2010` beside `median_household_income_2024`. It reports published values in that year's dollars; inflation adjustment belongs to the comparison.
+- **A change Indicator** `builds_on` two vintage Indicators reported at the same geography. Its ID names both years, e.g. `median_household_income_pct_change_2010_2024`.
+- **The change math lives in `lib/`**, so a change Indicator's compiled code is a few lines. A new pair of years is a copied spec with new `builds_on` and a quick review; the agent may draft it from a prompt in author mode.
+- When a third vintage of one measure is needed, revisit *Non-expert parameters* ([§ 13](#13-deferred)).
+
 #### Selections (`measure: points`)
 
 A selection is a reviewed set of points, e.g. the reported crime incidents in a time window. Later Indicators can build on it (`builds_on`), e.g. to count points per unit. A different selection (say, property crimes only) is a new Indicator, not a parameter.
 
-- **ID** starts with `points_` ([§ 12](#naming)). The time window doesn't go in the ID, the way the ACS vintage doesn't.
+- **ID** starts with `points_` ([§ 12](#naming)). The time window doesn't go in the ID.
 - **`geography`** is the clip extent: points outside its boundary are excluded. There are no `crosswalks`, `reliability` or `unit`.
 - **`window`** (optional): `{ field, from, to }`, ISO dates, both inclusive. `field` is one of the Indicator's `data` fields. Dates are local dates ([§ 12](#dates-and-times)); `lib/` converts the times before comparing, so compiled code doesn't repeat it. Changing the window changes the spec, so the code is stale.
 - **The Indicator does all the filtering**, so its body may name its Resource's fields. Still no place names. Such an Indicator is tied to one Resource by nature, so it's less reusable than a Census Indicator.
@@ -456,7 +465,7 @@ cleveland-analysis/
   | Resource | `<publisher>_<name>` | `census_api`, `cle_311_calls` |
   | Geography | `<unit>_<boundary year>`, or a `cle_` prefix for city-specific ones | `bg_2020`, `cle_neighborhoods` |
   | Crosswalk | `<from>__to__<to>` | `bg_2020__to__cle_neighborhoods` |
-  | Indicator | what it measures, not where | `housing_cost_burden_pct` |
+  | Indicator | what it measures, not where; Census data ends with the ACS end year ([§ 4.4](#vintages-and-change-over-time)) | `housing_cost_burden_pct_2024` |
   | Indicator (selection) | `points_<what it selects>` | `points_reported_crime_incidents` |
   | Visualization | `map_<indicator>__<geography>` | `map_housing_cost_burden_pct__cle_neighborhoods` |
 
@@ -534,10 +543,10 @@ Agreed during design, but not part of the first build.
 | **Other evaluation layers** | Invariant checks (percentages between 0 and 100, numerator ≤ denominator, parts add up to the city total). Independent re-implementation. Map checks. A log of human corrections. A second-city test. |
 | **Golden indicator set** | 5–10 indicators with trusted published values to anchor the known-answer tests. |
 | **Visualization rules** | Data-quality notes on maps, how unreliable values look, shared color scales across related maps. |
-| **Non-expert parameters** | Pre-approved settings run-mode users may change, e.g. survey year. |
+| **Non-expert parameters** | Pre-approved settings run-mode users may change, e.g. survey year. Trigger for survey year: a third vintage of one measure ([§ 4.4](#vintages-and-change-over-time)); then an approved list of years, with the year in output names. |
 | **Data-source proposals log** | A place for the agent's suggested new sources. For now, they're raised in conversation. |
 | **More OKF features** | `sources`, `stale_after`, attested computation, `log.md`. |
-| **Change over time** | Comparisons across years, including converting 2010 boundaries to 2020. |
+| **Change over time** | Comparisons across years, including converting 2010 boundaries to 2020. Structure decided ([§ 4.4](#vintages-and-change-over-time)); being built in chunks 4a–4b. |
 | **Packaging as a skill** | After the Cleveland study works end to end. AGENTS.md rule 1 (route every request through the runner) moves into the skill, with a description that matches plain-language requests. |
 | **Shared Visualization defaults** | One Visualization spec per map stays the rule: each map keeps its own ID, approval, and `# Design choices`. Once house style repeats across many maps, make `classification` and `classes` optional, with defaults in `lib/`; changing a default is then a reviewed `lib/` change that reruns all results. Triggers: one setting changed across every map, shared color scales across related maps (*Visualization rules*), or `# Design choices` sections that are only boilerplate. Rejected: one generic `choropleth` spec that takes its indicator at run time (unreviewed combinations; see *Non-expert parameters*), and map settings inside Indicators (a color change would make compiled code stale). Raised in chunk 2. |
 | **GeoPackage layers** | A `layer` field on Geography, for multi-layer files. Not needed while every file has one layer. |

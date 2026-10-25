@@ -100,7 +100,147 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 ## Current chunk
 
-_None. The next chunk is defined in chat with the expert (step 1 of the working method)._
+### Chunk 4a — 2010 block group median household income, matched to 2020 block groups
+
+**Analysis question (chunks 4a + 4b):** how has median household income changed at the block group level between 2010 and 2024? 4a gets the 2010 values onto 2020 block groups. 4b computes the change.
+
+**Brief:** the first Indicator on an older boundary vintage, and the first crosswalk that can carry a median.
+- A second ACS vintage (2006–2010) on a new Geography, `bg_2010`.
+- A new crosswalk method, `matched`. It copies a value 1:1 from a 2010 block group to a 2020 block group only when their land areas overlap almost completely, both ways. Every other 2020 block group is blank, with a note.
+- Existing Census Indicators are renamed with their ACS end year (architecture.md § 4.4 *Vintages and change over time*).
+- **Go/no-go gate for 4b.** At Stop C, the expert sees how many 2020 block groups got a 2010 value, then decides whether 4b goes ahead at block group level, moves to tracts, or stops.
+
+**Branch:** `chunk/04a-bg-2010-income`
+
+**Status:** ✅ Stop A passed 2026-10-25: requirements and design issues 1–7 approved; Stop A questions answered (decisions 5–9). Next: task 1, in Claude Code.
+
+**Exercises (capability checklist):**
+- New items to add: file Resource fetched by URL (delimited text); a Geography on 2010 boundaries; `matched` crosswalk; a median moved through a crosswalk (`# Aggregation`).
+- *Indicator that builds on other Indicators* stays ☐ until 4b.
+
+_Place and unit words in this section are requirements. They do not go into the Indicator body (chunk 2, design issue 5)._
+
+#### Requirements
+
+**Specs to draft or change** (all `status: draft`)
+
+| ID | Type | Settings |
+|---|---|---|
+| `census_api` (changed) | Resource | Add `{ dataset: acs/acs5, vintage: 2010 }` to `datasets`. About: vintage 2010 is the 2006–2010 5-year estimate, on 2010 census geography. Notes: anything about 2010 found in task 2 (annotation codes, coded values, request syntax). |
+| `census_bg_relationship_2020_2010` | Resource | The Census Bureau's 2020 ↔ 2010 block group relationship file, Ohio state file. A file Resource at a URL; no `auth`, no `datasets`. Body: About (publisher, URL, one row per 2020 × 2010 block group pair that overlaps), Schema (the GEOID and land-area fields used), Notes (land area only, from full-resolution TIGER; no population or housing counts). URL and field names confirmed in task 2. |
+| `bg_2010` | Geography | Census 2010 cartographic boundary file for Ohio block groups (1:500,000, same kind as `bg_2020`); `id_field` holds the 12-digit GEOID (design issue 5); `within: cle_city`; `within_rule: majority_area`; `census_unit: block group`. |
+| `bg_2010__to__bg_2020` | Crosswalk | `method: matched`; `weights_source: census_bg_relationship_2020_2010`; `min_overlap: 0.80` (decision 6). |
+| `median_household_income_2010` | Indicator | `measure: median`; `unit: dollars`; `geography: bg_2010`; `crosswalks: [bg_2010__to__bg_2020]`; `data`: `census_api`, `acs/acs5` 2010, `B19013_001E` "Median household income in the past 12 months (in 2010 inflation-adjusted dollars)"; `reliability: { cv_threshold: 0.30, low: flag }`. Body follows `median_household_income_2024`, plus `# Aggregation`. |
+| `map_median_household_income_2010__bg_2020` | Visualization | `indicator: median_household_income_2010`; `geography: bg_2020`; `classification: quantile`; `classes: 5`; `colors: Greens` (decision 8). |
+| Renamed (design issue 1) | Indicator, Visualization | `population_count` → `population_count_2024`, `median_household_income` → `median_household_income_2024`, and their maps → `map_population_count_2024__bg_2020`, `map_median_household_income_2024__bg_2020`. Titles name the ACS period (e.g. "Median household income, 2020–2024"), because the agent matches prompts against titles. |
+
+Used unchanged: `cle_city`, `bg_2020`, `bg_2020__to__cle_city`.
+
+**Matching rule** (Crosswalk body and `lib/crosswalk.py`)
+- For each pair of a 2010 block group *a* and a 2020 block group *b* in the relationship file, the shared land area is `AREALAND_PART`.
+- *a* and *b* **match** when the shared land area is at least `min_overlap` of *a*'s land area **and** at least `min_overlap` of *b*'s. With `min_overlap` above 0.5, each unit has at most one match.
+- A 2020 block group with a match takes its 2010 block group's `estimate`, `moe` and `note` unchanged.
+- A 2020 block group with no match, or whose match isn't in `bg_2010` (e.g. it straddles the city line differently), is blank, with `note` "no matching 2010 block group".
+- The build file `build/crosswalks/bg_2010__to__bg_2020.csv` lists every overlapping pair with both overlap shares and whether it matched, so the threshold can be reviewed and tuned at Stop C by editing frontmatter (no recompile).
+
+**Computation** (2010 Indicator body, without place names): same as `median_household_income_2024`.
+1. Annotations as in `census_api` § Notes.
+2. Top- and bottom-coded values blank, with the coded meaning in `note` (codes for 2010 confirmed in task 2).
+3. Otherwise, `estimate` and `moe` are the published values.
+
+**`# Aggregation`** (2010 Indicator body): a median can't be split or summed, so it moves only through a crosswalk that pairs units one to one. The value is the source unit's published median, unchanged; units without a pair are blank.
+
+**Caveats** (2010 Indicator `# Caveats`, without place names)
+- Values are in 2010 inflation-adjusted dollars. They are not comparable with later years until adjusted (chunk 4b).
+- The 2006–2010 estimates were controlled to the population estimates of the time, not to the 2010 census counts.
+- Through a matched crosswalk, a unit's value is its matched source unit's: their land areas differ by up to `1 − min_overlap`, and land area isn't the same as where households are.
+- Units with too few sample cases, coded values, or no match are blank.
+
+**Outputs** (each with its manifest)
+- `outputs/tables/median_household_income_2010__bg_2010.csv` and `…__bg_2020.csv`
+- `outputs/visualizations/map_median_household_income_2010__bg_2020.html`
+- The renamed outputs of the four renamed specs. Values unchanged; the old files are removed from `outputs/`.
+- `build/crosswalks/bg_2010__to__bg_2020.csv` (not committed)
+
+**Go/no-go summary** (in Stop C's notes, from the build file and the tables; no new spec)
+- 2020 block groups with a match, at `min_overlap` 0.80, 0.90 and 0.95.
+- Of those, how many have a 2010 value (not blank for other reasons).
+- Their share of the 2020–2024 population (from `population_count_2024`).
+- The map, to see where the blanks fall.
+
+**Tests**
+- **Spec validation** passes for the whole project, including the checks from design issues 3 and 4.
+- **`kat_003`** (exact): `median_household_income_2010` at `bg_2020`, for a 2020 block group whose matched 2010 block group has a **different** GEOID if one exists, so the test covers the match and not only the fetch. Value from the Census API, confirmed by the expert.
+- `kat_001` and `kat_002` still pass under their renamed Indicators.
+- **Invocation:**
+  - `inv_002`, `inv_003`: specs renamed. `inv_003`'s prompt names the period ("…for 2020–2024").
+  - `inv_006`, plain income map with no year. Prompt: "Map median household income by block group in Cleveland." Expected: `asks`: the agent asks which one and names the available years (2006–2010, 2020–2024), and runs nothing until answered (decision 7).
+  - `inv_007`, 2010 map. Prompt: "Map median household income in 2010 by block group." Expected: `runs`, `spec: map_median_household_income_2010__bg_2020`.
+  - `inv_008`, change isn't available yet. Prompt: "How has median household income changed by block group since 2010?" Expected: `not_available`. The agent must not compare the two tables outside a spec.
+  - Existing `inv_001`–`inv_005` still pass.
+
+**Not in this chunk:** change or percent change, inflation adjustment, `builds_on`, significance, diverging maps (all 4b); tracts; household-weighted overlap; other vintages.
+
+#### Design issues
+
+Found by checking the requirements against architecture.md, AGENTS.md, validation.md, the templates and `lib/`. Proposed fixes:
+
+1. **Rename Census Indicators with their ACS end year** (§ 12 naming, already in architecture.md).
+   - Move the two Indicator specs and their compiled code; update the code's `# spec:` path. The spec hash is unchanged (the ID isn't in the text), but the code hash changes, so the expert re-verifies and results rerun.
+   - Rename both maps; update `indicator:`, `kat_001`, `kat_002`, `inv_002`, `inv_003` and the `index.md` files.
+   - Every edited `stable` spec goes back to `draft`. Outputs must be byte-identical apart from names and `created`.
+2. **Prompts that match several vintages.** AGENTS.md rule 1 already says to ask. Extend it: when several match, ask which one, listing the matching specs and what tells them apart (e.g. the available years). Add `inv_006`.
+3. **`matched` crosswalk method** (§ 4.3 table, § 12 *Counts first*, Crosswalk template, validation.md, `lib/validate.py`):
+   - New method: pairs units one to one by reciprocal land-area overlap (rule above). New Crosswalk field `min_overlap` (above 0.5 and at most 1), required for `matched` only. `matched` requires `weights_source` (the relationship Resource) and has no `weights`.
+   - § 12: "Crosswalks move counts only, never percentages or medians", **except `matched`**, which copies a value unchanged. A `median` or `index` still needs `# Aggregation` to use it.
+4. **`lib/` for `matched`:**
+   - `crosswalk.build` reads the relationship file through a snapshot and writes the build file with both overlap shares.
+   - New `crosswalk.apply_matched` copies `estimate`, `moe` and `note`, and writes the "no matching" note.
+   - `runner.report` uses it for any `measure` when the method is `matched`; other methods still move counts only.
+5. **A file Resource at a URL, as delimited text** (§ 10 already allows a file at a URL). Snapshot the whole file once; read only the named columns, with GEOIDs as text. The offline field check (validation.md) covers it.
+6. **GEOID for `bg_2010`.** As far as the agent knows, 2010 cartographic files have `GEO_ID` (`1500000US` + the 12-digit GEOID), not `GEOID`. If task 2 confirms this, `lib/geography` reads a Census `GEO_ID` as its GEOID for a Geography with `census_unit`, documented in § 4.2. Not TIGER/Line: its shapes extend into Lake Erie, which would change the majority-area rule for lakeshore units.
+7. **2010 Census API requests** (`lib/census`, only if task 2 finds differences): older vintages may not allow `tract:*` in a block group request (then one request per tract), and may use different annotation codes. `census_api` § Notes records whatever is found.
+
+Proposed: apply 1–7 after task 2's checks, before drafting specs.
+
+#### Stop A questions
+
+Answered 2026-10-25. Recorded as decisions 5–9.
+
+#### Tasks
+
+1. Commit the chunk 4a plan (this roadmap and the architecture.md § 4.4 change) on `main`, then create `chunk/04a-bg-2010-income`.
+2. **Check the sources** (network needed). 🛑 **Stop and discuss if any check fails.**
+   - The Census API serves `acs/acs5` 2010 `B19013_001E`/`_001M` at block group level for Cuyahoga County. Record the request syntax, annotation codes, and top- and bottom-coded values.
+   - The 2010 cartographic block group file for Ohio: URL, fields, coordinate system.
+   - The block group relationship file: URL, fields, and the land-area columns.
+   - If the API has no 2006–2010 block group data, the fallback is NHGIS: a new Resource, which needs the expert.
+3. Apply design issues 1–7. Do the rename (issue 1) first and confirm outputs are unchanged and `kat_001`/`kat_002` pass.
+4. Draft the new specs, update `census_api` and each folder's `index.md`, and add `kat_003` and `inv_006`–`inv_008`. 🛑 **Stop B.**
+5. Build the `lib/` changes (issues 3–7). Compile `pipeline/indicators/median_household_income_2010.py`.
+6. Run validation, known-answer tests and invocation tests, and produce the outputs. Write the go/no-go summary. 🛑 **Stop C:** the expert reviews, sets `min_overlap`, and decides on 4b.
+7. Retro per the working method.
+
+#### Decisions (expert, 2026-10-25)
+
+1. **Approach A:** each vintage is its own Indicator, and the year is never a run-time parameter. Recorded in architecture.md § 4.4 *Vintages and change over time*, §§ 4.1, 12, 13.
+2. **Split chunk 4** into 4a (this chunk) and 4b (below). 4b is written in detail after 4a's retro.
+3. **Boundary match:** one to one, with units that don't match left blank with a note (compute with flagged uncertainty). If too few units match, rethink the indicator or move to tracts.
+4. **Accepted caveats:** coded values that don't line up across years after adjustment; possible differences in 2010 annotation codes; 2006–2010 controls to population estimates, not census counts.
+5. **"2010" is the ACS 2006–2010 5-year estimate**, compared with 2020–2024 in 4b. The periods don't overlap, as the Census Bureau requires for comparing 5-year estimates.
+6. **Overlap source: the Census relationship file** (land area from full-resolution TIGER), not an intersection of the cartographic files, whose 1:500,000 shapes are generalized differently in each vintage. **`min_overlap` starts at 0.80**, tuned at Stop C.
+7. **A prompt that matches several vintages:** the agent asks which one and names the available years (AGENTS.md rule 1, design issue 2). No default to the latest.
+8. **2010 map included:** `Greens`, quantile, 5 classes. Its classes aren't comparable with the 2024 map's (different dollars, different units).
+9. **`population_count` is renamed too** (`population_count_2024`), so every Census Indicator follows one naming rule.
+
+### Chunk 4b — Change in median household income, 2010 → 2024 (planned; detailed after 4a's retro)
+
+Only if 4a's go/no-go says so.
+- `median_household_income_pct_change_2010_2024`: `builds_on` `median_household_income_2010` and `median_household_income_2024` at `bg_2020`. New `measure: change`; the change math in a `lib/` helper; first runner support for `builds_on`.
+- **Inflation:** R-CPI-U-RS (the index the Census Bureau uses for ACS), 2024 annual average ÷ 2010 annual average (320.4), written in the change Indicator's spec with its source. An expert-approved exception to AGENTS.md rule 3 (no Resource for one constant). Read the 2024 value from BLS's current file (BLS reissued the series with corrections in April 2026).
+- **Proof of concept:** no significance test. Caveats go in the manifest (a new manifest field), e.g. that block group MOEs are large and many changes may not be statistically significant.
+- Diverging color scheme with fixed breaks around 0.
+- Possibly CSV columns for the start and end values.
 
 ---
 
@@ -214,3 +354,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-24 | Claude Code | Expert answered Stop C questions 1–7: keep the boundary clip, 500 m, `Purples`, the manifest breaks, the source-note behaviour; offense lists in code and the "No incidents" label are fine. | 🛑 Stop C: question 8, approval, `inv_001`–`inv_005`. |
 | 2026-10-24 | Claude Code | Question 8: added `pyogrio` and `pyproj` to `pyproject.toml` (lock versions unchanged). Expert approved: 3 specs `stable`, `points_reported_crime_incidents` code `verified`. Validation clean, no warnings; the heat map passes run mode. | 🛑 Stop C: expert runs `inv_001`–`inv_005` in fresh sessions. Then task 6 (retro). |
 | 2026-10-24 | Claude Code | Expert ran `inv_001`–`inv_005` in fresh sessions: all pass. Task 6: retro recorded, checklist updated (local file resource, point dataset, selection, hexbin), architecture.md §§ 4.5 and 6 (source note), `chunk/03-crime-heatmap` merged into `main`. | Define chunk 4 in chat (e.g. counts per unit building on the selection). |
+| 2026-10-25 | Chat | Started chunk 4 (change in block group median household income, 2006–2010 → 2020–2024). Expert chose one Indicator per vintage; the year is never a run-time parameter (architecture.md § 4.4 *Vintages and change over time*; §§ 4.1, 12, 13 updated). Split into 4a (`bg_2010`, a 1:1 `matched` crosswalk, the 2010 median, measuring boundary change) and 4b (change Indicator, inflation factor written in its spec, caveats in the manifest instead of significance testing, diverging map). | Write 4a into Current chunk; its first task measures 2010 → 2020 block group overlap. |
+| 2026-10-25 | Chat | Wrote chunk 4a requirements into Current chunk: specs, matching rule, design issues 1–7, Stop A questions 1–5, tasks, go/no-go summary for 4b; 4b outlined. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
+| 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4a requirements and design issues 1–7. Decisions 5–9: 2006–2010; Census relationship file, `min_overlap` 0.80; ask and name the available years when several vintages match; 2010 map included; `population_count` renamed. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (source checks). Stop B after specs are drafted. |
