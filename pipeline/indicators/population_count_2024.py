@@ -1,6 +1,7 @@
 # spec: specs/indicators/population_count_2024.md
 # spec_hash: sha256:bff8441d9998b0ab58a7e2c8d5ef5034632f6881c3e2ec48cf94147fff7b5b91
 # generated: { by: claude-code, at: 2026-10-25T10:42:11-04:00 }
+# verified: { by: human:siqi, at: 2026-10-25T11:10:24-04:00 }
 """Total population (B01003_001). Steps follow the spec's # Computation.
 
 Returns one table at the Indicator's geography; the runner applies crosswalks and reliability."""

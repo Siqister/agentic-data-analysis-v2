@@ -3,7 +3,7 @@ type: Resource
 title: U.S. Census Bureau Data API
 description: Census Bureau API serving American Community Survey (ACS) tables.
 resource: https://api.census.gov/data
-status: draft
+status: stable
 tags: [census]
 
 auth: CENSUS_API_KEY

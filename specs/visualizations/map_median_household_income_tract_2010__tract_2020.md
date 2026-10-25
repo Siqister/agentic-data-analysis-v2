@@ -2,7 +2,7 @@
 type: Visualization
 title: Median household income by census tract, 2006–2010
 description: Choropleth of 2006–2010 median household income on 2020 census tracts in Cleveland, where a 2010 tract matches.
-status: draft
+status: stable
 
 indicator: median_household_income_tract_2010
 geography: tract_2020

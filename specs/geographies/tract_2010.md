@@ -3,7 +3,7 @@ type: Geography
 title: Census tracts, 2010 (Cleveland)
 description: 2010 census tracts with most of their area inside the City of Cleveland.
 resource: https://www2.census.gov/geo/tiger/GENZ2010/gz_2010_39_140_00_500k.zip
-status: draft
+status: stable
 tags: [census, boundaries]
 
 id_field: GEO_ID

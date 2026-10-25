@@ -3,7 +3,7 @@ type: Resource
 title: Census tract relationship file, 2020 ↔ 2010 (Ohio)
 description: Census Bureau table of every overlapping pair of a 2020 and a 2010 census tract in Ohio, with their shared land area.
 resource: https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_st39.txt
-status: draft
+status: stable
 tags: [census, boundaries]
 ---
 

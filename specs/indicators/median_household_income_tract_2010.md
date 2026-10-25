@@ -2,7 +2,7 @@
 type: Indicator
 title: Median household income by census tract, 2006–2010
 description: Median household income in the past 12 months, in 2010 dollars, from the ACS 2006–2010 5-year estimates.
-status: draft
+status: stable
 tags: [income]
 
 measure: median

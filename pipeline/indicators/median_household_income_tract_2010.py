@@ -1,6 +1,7 @@
 # spec: specs/indicators/median_household_income_tract_2010.md
 # spec_hash: sha256:2dc89bf2520ad16ea5725e44d3796942e4676ceee2010f31719f3b947db90c89
 # generated: { by: claude-code, at: 2026-10-25T11:03:31-04:00 }
+# verified: { by: human:siqi, at: 2026-10-25T11:10:24-04:00 }
 """Median household income (B19013_001). Steps follow the spec's # Computation.
 
 Returns one table at the Indicator's geography; the runner applies the matched

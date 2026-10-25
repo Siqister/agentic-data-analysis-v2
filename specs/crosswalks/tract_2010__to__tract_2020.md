@@ -2,7 +2,7 @@
 type: Crosswalk
 title: Census tracts (2010) → census tracts (2020), matched
 description: Gives a 2020 tract the value of the 2010 tract it overlaps almost completely, both ways; other 2020 tracts are blank.
-status: draft
+status: stable
 
 from: tract_2010
 to: tract_2020

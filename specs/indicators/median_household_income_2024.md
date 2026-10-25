@@ -2,7 +2,7 @@
 type: Indicator
 title: Median household income by block group, 2020–2024
 description: Median household income in the past 12 months, in 2024 dollars, from the ACS 2020–2024 5-year estimates.
-status: draft
+status: stable
 tags: [income]
 
 measure: median
