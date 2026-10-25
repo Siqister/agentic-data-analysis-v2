@@ -10,5 +10,6 @@ dependencies = [
     "pyproj==3.8.0; python_full_version >= '3.12'",
     "pyyaml==6.0.3",
     "requests==2.34.2",
+    "scikit-learn==1.9.1",
     "shapely==2.2.0",
 ]

@@ -100,3 +100,16 @@ source: Computed by hand from population_count_tract_2010__tract_2020.csv (3809)
 ```
 
 **Not a trusted published value** (decision 5, chunk 5; an accepted exception to [validation.md § 2](validation.md#2-known-answer-tests), like `kat_005`). It checks the joins, the order of start and end, and the arithmetic with no inflation factor: 3805 ÷ 3809 − 1 = −0.1050%. Swapping start and end gives +0.1051%, outside the tolerance. The start comes through the matched crosswalk, so the test covers that path too. If `min_overlap` rises above 0.83, this tract has no value and the test must be replaced, like `kat_003`.
+
+## kat_008 — Cluster of one extreme tract
+
+```yaml
+indicator: income_population_cluster_tract_2010_2024
+geography: tract_2020
+unit: "39035107701"              # Census Tract 1077.01 (2020): income $60,483, income change +33.8%, population change +293.1%
+expected: 4
+tolerance: exact
+source: Chat run on the current tables with scikit-learn (log income, z-scores, no clipping, n_init 50, seed 0, k 5), 2026-10-25
+```
+
+**Not a trusted published value** (decision 9, chunk 6a; an accepted exception to [validation.md § 2](validation.md#2-known-answer-tests), like `kat_005` and `kat_007`). This tract forms a cluster of its own at every k from 3 to 8. It checks that extreme values are kept (with clipping, it joins a larger cluster), the log and scaling, and the numbering by median income (its $60,483 is the fourth of five cluster medians). If `k` changes at Stop C, the expected value is recomputed and recorded here.

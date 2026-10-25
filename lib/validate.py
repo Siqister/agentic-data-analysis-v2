@@ -20,6 +20,10 @@ from lib.specs import FOLDERS, SPECS, Spec, dependencies, dependents, load_all
 
 COMMON = ["type", "title", "description", "status"]
 HEX_FLOOR_M = 250   # privacy floor for hexbin maps (architecture.md § 12)
+K_RANGE = range(2, 11)   # cluster `k` (Tableau10 has 10 colors; architecture.md § 4.4)
+# d3-scale-chromatic categorical schemes (d3 v7.9.0) and their number of colors
+CATEGORICAL = {"Category10": 10, "Accent": 8, "Dark2": 8, "Observable10": 10, "Paired": 12, "Pastel1": 9,
+               "Pastel2": 8, "Set1": 9, "Set2": 8, "Set3": 12, "Tableau10": 10}
 REQUIRED = {
     "Resource": ["resource"],
     "Geography": ["resource", "id_field"],
@@ -31,12 +35,12 @@ CHOICES = {
     "status": {"draft", "stable", "deprecated"},
     "method": {"population_weighted", "areal", "centroid", "nested", "matched"},
     "weights": {"total_population", "households", "housing_units"},
-    "measure": {"percent", "rate", "count", "median", "index", "points", "percent_change"},
+    "measure": {"percent", "rate", "count", "median", "index", "points", "percent_change", "cluster"},
     "unit": {"count", "dollars"},
     "within_rule": {"majority_area", "centroid", "any"},
     "census_unit": {"block group", "tract"},
     "map": {"choropleth", "hexbin"},
-    "classification": {"quantile", "equal_interval", "natural_breaks", "manual"},
+    "classification": {"quantile", "equal_interval", "natural_breaks", "manual", "categorical"},
 }
 
 
@@ -149,6 +153,15 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
                     err(f"{f} — `inflation` is only for inputs with `unit: dollars`")
             elif "inflation" in m:
                 err(f"{f} — only a percent_change Indicator has `inflation`")
+            if m.get("measure") == "cluster":
+                if len(m.get("builds_on") or []) < 2:
+                    err(f"{f} — a cluster Indicator builds on two or more Indicators")
+                for k in ("data", "crosswalks", "reliability", "unit"):
+                    if m.get(k):
+                        err(f"{f} — a cluster Indicator has no `{k}`")
+                _check_cluster(f, m, err)
+            elif "cluster" in m:
+                err(f"{f} — only a cluster Indicator has `cluster`")
             if "inflation" in m:
                 _check_inflation(f, m["inflation"], err)
             if m.get("measure") in ("median", "index") and m.get("crosswalks") and "Aggregation" not in s.sections():
@@ -190,6 +203,17 @@ def run(specs: dict[str, Spec] | None = None, network: bool = False) -> Report:
                     err(f"{f} — manual `breaks` needs classes − 1 values in increasing order")
             elif m.get("breaks"):
                 err(f"{f} — `breaks` only applies to manual classification")
+            if ind and ind.type == "Indicator" and (ind.meta.get("measure") == "cluster") != (m.get("classification") == "categorical"):
+                err(f"{f} — `classification: categorical` is for a cluster Indicator, and a cluster Indicator takes only categorical")
+            if m.get("classification") == "categorical":
+                k = (ind.meta.get("cluster") or {}).get("k") if ind else None
+                if k is not None and m.get("classes") != k:
+                    err(f"{f} — `classes` must equal {ind.id}'s `k` ({k})")
+                n = CATEGORICAL.get(m.get("colors"))
+                if n is None:
+                    err(f"{f} — `colors` must be a d3 categorical scheme: {', '.join(CATEGORICAL)}")
+                elif isinstance(m.get("classes"), int) and n < m["classes"]:
+                    err(f"{f} — {m['colors']} has {n} colors, fewer than `classes` ({m['classes']})")
 
     for s in specs.values():
         try:
@@ -225,6 +249,24 @@ def _check_inflation(f, inf, err):
         err(f"{f} — `inflation.from` and `inflation.to` each need a `year` and a positive `value`")
     elif inf["from"]["year"] >= inf["to"]["year"]:
         err(f"{f} — `inflation.from.year` must be before `inflation.to.year`")
+
+
+def _check_cluster(f, m, err):
+    """`cluster: { method, k, seed, log }` (architecture.md § 4.4)."""
+    c = m.get("cluster")
+    if not isinstance(c, dict):
+        err(f"{f} — a cluster Indicator needs `cluster` (`method`, `k`, `seed`)")
+        return
+    if c.get("method") != "kmeans":
+        err(f"{f} — `cluster.method` must be kmeans")
+    for k in ("k", "seed"):
+        if not isinstance(c.get(k), int) or isinstance(c.get(k), bool):
+            err(f"{f} — `cluster.{k}` must be a whole number")
+    if isinstance(c.get("k"), int) and c["k"] not in K_RANGE:
+        err(f"{f} — `cluster.k` must be from {K_RANGE.start} to {K_RANGE.stop - 1}")
+    log = c.get("log") or []
+    if not isinstance(log, list) or any(i not in (m.get("builds_on") or []) for i in log):
+        err(f"{f} — `cluster.log` lists inputs that are in `builds_on`")
 
 
 def _check_matched(f, m, frm, specs, err):

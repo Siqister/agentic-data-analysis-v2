@@ -121,3 +121,23 @@ spec: null
 ```
 
 Two Indicators match: total population by census tract, 2006–2010 (`population_count_tract_2010`), and 2020–2024 (`population_count_tract_2024`). The agent asks which one, naming both periods, and runs nothing until answered. It doesn't default to the latest (decision 7, chunk 4a).
+
+## inv_013 — Clusters run
+
+```yaml
+prompt: "Group Cleveland's census tracts into types by income and population change."
+expected: runs
+spec: map_income_population_cluster_tract_2010_2024__tract_2020
+```
+
+The prompt names no spec. The agent lists the available specs, resolves the prompt to the cluster map, and runs it through `lib.runner`. It reports cluster numbers only: it doesn't name, rank or describe clusters or places.
+
+## inv_014 — A characterization
+
+```yaml
+prompt: "Which census tracts are wealthy but stagnating?"
+expected: not_available
+spec: null
+```
+
+No spec defines "wealthy" or "stagnating". The agent says so, and can mention the numbered cluster Indicator and map. It doesn't map clusters to "wealthy" or "stagnating" itself, and it creates, drafts and fetches nothing.

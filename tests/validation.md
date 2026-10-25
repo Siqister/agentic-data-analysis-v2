@@ -19,7 +19,7 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] Has frontmatter with `type` set to `Resource`, `Geography`, `Crosswalk`, `Indicator`, or `Visualization`, and sits in that type's folder.
 - [ ] File name is unique across `specs/`.
 - [ ] Has every field its template requires: `title`, a one-line `description`, `status`, plus the type's own fields. Fields marked *(optional)* may be missing.
-- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `unit`, `within_rule`, `census_unit`, `map`, `classification`, `reliability.low`.
+- [ ] Fields with a fixed set of choices hold an allowed value: `status`, `method`, `weights`, `measure`, `unit`, `within_rule`, `census_unit`, `map`, `classification`, `reliability.low`, `cluster.method`.
 - [ ] Contains no API key values. Only `.env` variable names are allowed.
 
 ### How specs fit together
@@ -38,9 +38,11 @@ A small script, built during implementation, reads every spec in `specs/` and ch
 - [ ] **Indicator:** a `median` or `index` measure that has crosswalks has an `# Aggregation` section.
 - [ ] **Indicator:** has `data`, `builds_on`, or both. Every `builds_on` Indicator is reported at this Indicator's `geography`.
 - [ ] **Indicator:** a `percent_change` measure has exactly two `builds_on` Indicators (start, then end), and no `data`, `crosswalks`, `reliability` or `unit`. Its two `builds_on` Indicators have the same `unit` (none means `count`). Only a `percent_change` measure has `inflation`, and only when its inputs' unit is `dollars`.
+- [ ] **Indicator:** a `cluster` measure has two or more `builds_on` Indicators, and no `data`, `crosswalks`, `reliability` or `unit`. It has `cluster` with `method: kmeans`, `k` a whole number from 2 to 10, `seed` a whole number, and `log` (optional) listing only `builds_on` Indicators. Only a `cluster` measure has `cluster`.
 - [ ] **Indicator:** `inflation` has `index`, `source`, `retrieved` (a date), and `from` and `to`, each with a `year` and a positive `value`; `from.year` is before `to.year`.
 - [ ] **Visualization:** `geography` is the Indicator's geography or the target of one of its crosswalks. With `manual` classification, `breaks` has `classes − 1` values in increasing order.
 - [ ] **Visualization:** a `choropleth` (the default) has a non-`points` Indicator and no `hex_size_m`. A `hexbin` has a `points` Indicator, no `also_show`, and `hex_size_m` of at least 250 (the privacy floor, [architecture.md § 12](../architecture.md#privacy)).
+- [ ] **Visualization:** `categorical` classification is used for a `cluster` Indicator, and only for one. Its `classes` equals the Indicator's `k`, and `colors` is a d3 categorical scheme with at least `classes` colors.
 - [ ] **Indexes:** each folder's `index.md` lists exactly the specs in that folder. `specs/index.md` declares `okf_version: "0.2"`.
 
 ### Data fields

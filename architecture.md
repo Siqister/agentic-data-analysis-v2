@@ -122,7 +122,7 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 | **Resource** | One API, file, or dataset | `specs/resources/` | `resource`, `auth`, `datasets` |
 | **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule`, `census_unit` |
 | **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source`, `min_overlap`, `fields` |
-| **Indicator** | One measure, or a reviewed selection of points | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability`, `window`, `inflation` |
+| **Indicator** | One measure, or a reviewed selection of points | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability`, `window`, `inflation`, `cluster` |
 | **Visualization** | One map | `specs/visualizations/` | `map`, `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show`, `hex_size_m` |
 
 ### Separation of concerns
@@ -212,6 +212,7 @@ One measure, such as "% of households with housing cost burden", or a reviewed s
   - `percent`, `rate`, `count`: move the counts, then compute ([§ 12](#12-conventions)).
   - `median`, `index`: with crosswalks, the body needs an `# Aggregation` section explaining a valid method.
   - `percent_change`: the change from one Indicator's value to another's, in percent ([below](#vintages-and-change-over-time)). Never moved through a crosswalk.
+  - `cluster`: a cluster number from several Indicators' values ([below](#clusters-measure-cluster)). Never moved through a crosswalk.
 - **`unit`** (optional): what the values are in, for display. `count` (the default) or `dollars`. Percentages come from `measure: percent`, not `unit`.
 - **`reliability`** (survey data only) sets the CV threshold, and whether low-reliability values are flagged or suppressed.
 - **`builds_on`** (optional) lists Indicators whose results this one uses. Each must be reported at this Indicator's `geography`. The runner runs them first, as dependencies; compiled code reads their tables at this `geography` with `ctx.indicator(id)` (from `outputs/tables/`, never recomputed). Their snapshots count as this Indicator's data, so a new snapshot below reruns it.
@@ -232,6 +233,26 @@ One Indicator has one vintage, fixed in its `data`. The year is **never a run-ti
 - **The change math lives in `lib/`**, so a change Indicator's compiled code is a few lines. A new pair of years is a copied spec with new `builds_on` and a quick review; the agent may draft it from a prompt in author mode.
 - When a third vintage of one measure is needed, revisit *Non-expert parameters* ([§ 13](#13-deferred)).
 
+#### Clusters (`measure: cluster`)
+
+A cluster Indicator groups units by several Indicators' values at once: each unit's inputs form one feature vector, and k-means gives it a cluster number. More inputs are added by editing `builds_on`. Decided in chunk 6a.
+
+- **ID** names what it combines, then `cluster`, the unit and both years, like a change Indicator ([§ 12](#naming)): `income_population_cluster_tract_2010_2024`.
+- **`builds_on`** has two or more Indicators, each reported at this `geography`. The first input sets the numbering. No `data`, `crosswalks`, `reliability`, `unit` or `inflation`.
+- **`cluster`**: `{ method, k, seed, log }`. `method` is `kmeans` (the only one for now); `k`, the number of clusters, from 2 to 10; `seed`, a whole number; `log` (optional), inputs to take the natural log of, each in `builds_on`.
+- **Computation**, all in `lib/` (the compiled code is a few lines):
+  1. Read each input's `estimate`, in `builds_on` order. A unit with any blank input is not clustered: its `estimate` is blank, and `note` lists each blank input by ID with that input's note.
+  2. Take the log of each input in `log`. Each must have only positive values (checked at run time).
+  3. Scale each input to z-scores over the clustered units (population SD, ddof 0). **No clipping or trimming.**
+  4. k-means: scikit-learn `KMeans`, `n_clusters` = `k`, `random_state` = `seed`, `n_init` = 50 (fixed in `lib/`), Lloyd algorithm.
+  5. Number the clusters 1 … k in ascending order of their members' median of the first input (as published, before the log); ties go by the next input.
+  6. `estimate` = the cluster number; `moe`, `cv` and `reliability` are blank. The table also carries each input's `estimate` ([§ 12](#output-tables-csv)).
+- **Run-time checks** (structural, so a failure stops the run): `k` ≤ the number of clustered units; every cluster has at least one unit; each clustered unit is nearest its own cluster's center in z-score space.
+- **Diagnostics.** `build/clusters/<id>__<geography>__diagnostics.csv`, never published: one row for each k from 2 to 8, with the spec's other settings: inertia, mean silhouette, stability (mean adjusted Rand index over 50 bootstrap resamples drawn with `seed`: each resample's fit predicts every clustered unit and is compared with the full fit) and cluster sizes in cluster-number order; the spec's `k` is marked. The expert uses it to choose `k`.
+- **Changing `k`, `seed` or `log`** changes the spec, so the code is stale ([§ 6](#6-compiled-code-and-staleness)): recompile and review.
+- **Clusters are numbered, never named.** The agent doesn't name, rank or describe them (AGENTS.md rule 4). Names are the expert's and will go in a spec.
+- Its `# Caveats` are copied into its output manifests ([§ 8](#8-manifests)).
+
 #### Selections (`measure: points`)
 
 A selection is a reviewed set of points, e.g. the reported crime incidents in a time window. Later Indicators can build on it (`builds_on`), e.g. to count points per unit. A different selection (say, property crimes only) is a new Indicator, not a parameter.
@@ -249,12 +270,13 @@ One map. **`map`** (optional) sets the kind: `choropleth` (the default) or `hexb
 
 - Classification (`classification`, `classes`, `breaks`) and `colors` are always set in the spec, **never chosen by the agent**.
 - Output: a self-contained HTML file using D3 v7 (pinned version), with its data embedded.
-- The page's source note lists the Resource and Geography titles (for an Indicator with only `builds_on`, those of its inputs; plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.".
+- The page's source note lists the Resource and Geography titles (for an Indicator with only `builds_on`, those of its inputs; plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.". A source reached through more than one input is named once.
 
 **Choropleth.** Its `indicator` is not a `points` Indicator.
 - **`indicator`** sets the color. **`geography`** must be one the Indicator is reported at.
 - The tooltip shows the unit's name, the estimate, the margin of error, and the reliability. It also shows any `also_show` Indicators.
 - **`percent_change`:** the tooltip and legend show a signed percent ("+12.3%"); the tooltip adds `start` and `end`, formatted by the inputs' `unit` ("Start, in end-year dollars" only with `inflation`), and leaves out the blank MOE and reliability. It's drawn with `manual` breaks around 0 and a diverging scheme.
+- **`cluster`** (chunk 6a): `classification: categorical`, which is only for a `cluster` Indicator and the only classification it takes. `classes` equals the Indicator's `k`; `colors` is a d3 categorical scheme with at least `k` colors (e.g. `Tableau10`); no `breaks`. Cluster n takes the scheme's nth color. Units not clustered are light gray, labelled "not clustered". The tooltip shows the unit's name, "Cluster 3", and each input formatted by its `unit` and `measure` ("$41,743", "−12.0%"), with no MOE or reliability. The legend has one row per cluster: its color, "Cluster n", the number of units, and the median of each input.
 
 **Hexbin heat map.** Its `indicator` is a `points` Indicator, and `geography` is that Indicator's `geography`.
 - **`hex_size_m`** (required): hex width across flats, in metres, at least the privacy floor ([§ 12](#privacy)).
@@ -340,6 +362,7 @@ Compiled code is tracked in git.
 | Apply crosswalk | Move counts and their margins of error between geographies, or copy matched values unchanged |
 | Rate from counts | Percentage or rate from numerator and denominator counts, with margin of error |
 | Change | Percent change from a start and an end Indicator's tables, with an inflation factor when there is one; carries the inputs and their MOEs |
+| Cluster | For a `cluster` Indicator: build the input table from `builds_on` with blank handling and notes, log, z-scores, k-means, numbering, the run-time checks, the diagnostics file, and per-cluster medians |
 | Margin-of-error math | Census Bureau formulas for sums, ratios, and proportions |
 | Reliability | Compute CV and flag or suppress values per the Indicator's settings |
 | Point aggregation | Count points within polygons, following the Indicator's point rules |
@@ -380,7 +403,9 @@ The manifest also records `lib_hash` (one hash of everything in `lib/`) and a `f
 
 An Indicator that `builds_on` others lists their snapshots in `data` (taken from their manifests) and adds an `indicator_inputs` block: each input table's path and fingerprint. The output is stale when an input's fingerprint changes, like a map's `indicator_output`.
 
-A `percent_change` Indicator's table manifest, and its map's manifest, also have a `caveats` list: the bullets of its `# Caveats`, copied. Other Indicators keep their caveats in the spec only (chunk 4b).
+A `percent_change` or `cluster` Indicator's table manifest, and its map's manifest, also have a `caveats` list: the bullets of its `# Caveats`, copied. Other Indicators keep their caveats in the spec only (chunks 4b, 6a).
+
+A `cluster` Indicator's table and map manifests also have a `clusters` block: `method`, `k`, `seed`, `log`, the number of units clustered and not, and for each cluster its number, size, and the median of each input in its own unit.
 
 A selection's manifest (`build/points/…gpkg.manifest.yaml`) works the same way and adds an `excluded` block: each reason, with the number of rows it removed.
 
@@ -466,7 +491,8 @@ cleveland-analysis/
 ├── data/raw/               snapshots (not committed)
 ├── data/static/            local files added by hand, e.g. boundary files (not committed)
 ├── build/                  intermediate results, e.g. crosswalk weights (not committed)
-│   └── points/             selections from points Indicators + manifest (never published)
+│   ├── points/             selections from points Indicators + manifest (never published)
+│   └── clusters/           diagnostics for cluster Indicators (never published)
 ├── outputs/                (not committed)
 │   ├── tables/             CSV + manifest
 │   └── visualizations/     HTML + manifest
@@ -492,6 +518,7 @@ cleveland-analysis/
   | Geography | `<unit>_<boundary year>`, or a `cle_` prefix for city-specific ones | `bg_2020`, `cle_neighborhoods` |
   | Crosswalk | `<from>__to__<to>` | `bg_2020__to__cle_neighborhoods` |
   | Indicator | what it measures, not where; Census data ends with the ACS end year, after the unit if it isn't the block group ([§ 4.4](#vintages-and-change-over-time)) | `housing_cost_burden_pct_2024`, `median_household_income_tract_2024` |
+  | Indicator (cluster) | what it combines, then `cluster`, the unit and both years | `income_population_cluster_tract_2010_2024` |
   | Indicator (selection) | `points_<what it selects>` | `points_reported_crime_incidents` |
   | Visualization | `map_<indicator>__<geography>` | `map_housing_cost_burden_pct__cle_neighborhoods` |
 
@@ -537,6 +564,7 @@ cleveland-analysis/
 | `reliability` | `ok` or `low` |
 | `numerator`, `numerator_moe`, `denominator`, `denominator_moe` | For percentages and rates |
 | `start`, `start_moe`, `end`, `end_moe` | For `percent_change` only, after `reliability`: the two inputs; `start` and `start_moe` multiplied by the inflation factor when there is one, otherwise as published |
+| one column per input, named by its Indicator ID | For `cluster` only, after `reliability`: each input's `estimate` as published (before log and scaling). `estimate` is the cluster number, a whole number 1 … k, shown as "Cluster 3"; `moe`, `cv` and `reliability` are blank |
 | `note` | Anything unusual, e.g. "suppressed: low reliability" |
 
 - Values are stored at full precision and rounded only for display: percentages to 1 decimal place (a percent change with its sign, e.g. "+12.3%"), counts and dollars to whole numbers (dollars with a `$`).
@@ -547,13 +575,13 @@ cleveland-analysis/
 
 ### Maps
 
-- Units with no value are drawn light gray (`#d9d9d9`).
+- Units with no value are drawn light gray (`#d9d9d9`). On a cluster map they're labelled "not clustered".
 - **Hexbin maps:** hexes inside the geography with no points are drawn light gray (`#d9d9d9`) and labelled as having none (e.g. "no incidents"); classes are computed over hexes with at least one point. Edge hexes are clipped to the geography's outline, so they cover less area and tend to fall in a lower class.
 - Titles describe what is measured, never what it shows.
 
 ### Tech stack
 
-- Python 3.11 or newer: pandas, geopandas, shapely, pyyaml, requests.
+- Python 3.11 or newer: pandas, geopandas, shapely, pyyaml, requests, scikit-learn (k-means and its diagnostics; pinned so clusters are reproducible).
 - Environment manager: uv. Exact versions are pinned in `pyproject.toml` and `uv.lock`.
 - D3 v7 at a pinned version.
 - git. `.env`, `data/`, `build/` and `outputs/` are not committed.
