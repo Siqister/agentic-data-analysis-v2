@@ -1,6 +1,7 @@
 # spec: specs/indicators/population_count_tract_pct_change_2010_2024.md
 # spec_hash: sha256:5a5d267d828260219d2c4227fc6c10b59ee4bdadb25b5413ddfebeec2f87dd66
 # generated: { by: claude-code, at: 2026-10-25T12:05:47-04:00 }
+# verified: { by: human:siqi, at: 2026-10-25T12:14:45-04:00 }
 """Percent change in total population, start to end. Steps follow the spec's # Computation;
 the arithmetic, blanks and notes are in lib/change.py.
 

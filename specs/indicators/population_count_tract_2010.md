@@ -2,7 +2,7 @@
 type: Indicator
 title: Total population by census tract, 2006–2010
 description: Number of people, from the ACS 2006–2010 5-year estimates.
-status: draft
+status: stable
 tags: [demographics]
 
 measure: count

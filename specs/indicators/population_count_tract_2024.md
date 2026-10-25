@@ -2,7 +2,7 @@
 type: Indicator
 title: Total population by census tract, 2020–2024
 description: Number of people, from the ACS 2020–2024 5-year estimates.
-status: draft
+status: stable
 tags: [demographics]
 
 measure: count

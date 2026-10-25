@@ -2,7 +2,7 @@
 type: Indicator
 title: Change in total population by census tract, 2006–2010 to 2020–2024 (%)
 description: Percent change in the number of people from the ACS 2006–2010 to the 2020–2024 5-year estimates.
-status: draft
+status: stable
 tags: [demographics, change]
 
 measure: percent_change

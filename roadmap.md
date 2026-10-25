@@ -119,7 +119,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/05-tract-population-change`
 
-**Status:** ✅ Stop A and Stop B passed 2026-10-25. Tasks 5–6 done. 🛑 **Stop C:** the expert reviews the code, `lib/` changes, outputs and the *Stop C notes* below, tunes the breaks, and approves. Then invocation tests in fresh sessions.
+**Status:** ✅ Stops A, B and C passed 2026-10-25 (decision 7). 🛑 Next: the expert runs `inv_001`–`inv_012` in fresh sessions. Then task 7 (retro).
 
 **Exercises (capability checklist):** no new items. Extends `matched` (first count), `percent_change` (no `inflation`, `unit: count`) and the change choropleth (count formatting).
 
@@ -239,6 +239,9 @@ Stop A (2026-10-25):
 
 Stop B (2026-10-25):
 6. **Specs approved for compiling**; Stop B notes 1–4 accepted (134 changes; keep `kat_007`; titles name the unit; the 2006–2010 count's caveats). The change Indicator names no `crosswalks`: its inputs are already at `tract_2020`, a percent change is never moved through a crosswalk (§ 4.4), and the crosswalk reaches its manifests through the graph.
+
+Stop C (2026-10-25):
+7. **Approved:** breaks kept as in decision 3; the four specs `stable`; the three code files `verified`; the `lib/` changes (change tooltip by input unit) accepted.
 
 ---
 
@@ -406,3 +409,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 5 requirements and design issues 1–3. Decisions 3–5: change map with breaks ±5/10/15/20 % (10 classes, `RdBu`); counts through the 0.80 `matched` crosswalk accepted; `kat_006` and `kat_007` as recommended. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (source check). Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Chunk 5 tasks 1–4: plan committed, branch created; source check passed (B01003 at tract level, 2010 and 2024); design issues 1–3 applied, existing outputs unchanged, `kat_001`–`kat_005` pass; three Indicators and the change map drafted; `kat_006` (3,809 ± 499), `kat_007` (−0.11), `inv_011`, `inv_012` added. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–4. Then task 5. |
 | 2026-10-25 | Claude Code | Stop B passed (decision 6). Task 5: three Indicators compiled; change tooltip formats start and end by the inputs' unit. Task 6: validation clean, `kat_001`–`kat_007` pass, existing outputs byte-identical, expected size matches (136 and 134 of 159). | 🛑 Stop C: expert reviews code and `lib/`, tunes breaks (*Stop C notes* 1), approves. Then invocation tests in fresh sessions. |
+| 2026-10-25 | Claude Code | Expert approved chunk 5 (decision 7): breaks kept, 4 specs `stable`, 3 code files `verified`. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the change map; `kat_006`, `kat_007` pass. | 🛑 Expert runs `inv_001`–`inv_012` in fresh sessions. Then task 7 (retro). |

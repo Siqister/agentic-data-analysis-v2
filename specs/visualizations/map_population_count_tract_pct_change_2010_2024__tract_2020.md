@@ -2,7 +2,7 @@
 type: Visualization
 title: Change in total population by census tract, 2006–2010 to 2020–2024
 description: Choropleth of the percent change in total population on 2020 census tracts in Cleveland.
-status: draft
+status: stable
 
 indicator: population_count_tract_pct_change_2010_2024
 geography: tract_2020
