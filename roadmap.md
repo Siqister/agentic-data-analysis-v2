@@ -115,7 +115,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/04a-tract-2010-income` (renamed from `chunk/04a-bg-2010-income` in task 1b).
 
-**Status:** ✅ Stop A passed 2026-10-25 for the tract version: requirements and design issues 1–8 approved, Stop A question 1 answered (decision 11). Tasks 1, 1b and 2 done (tract checks all pass). Next: task 3.
+**Status:** ✅ Stop A passed 2026-10-25 for the tract version: requirements and design issues 1–8 approved, Stop A question 1 answered (decision 11). Tasks 1–4 done. 🛑 **Stop B:** the expert reviews the drafted specs and the questions under *Stop B notes*.
 
 **Exercises (capability checklist):**
 - New items to add: tract Geography (`census_unit: tract`); file Resource fetched by URL (delimited text); a Geography on 2010 boundaries; `matched` crosswalk; a median moved through a crosswalk (`# Aggregation`).
@@ -233,6 +233,20 @@ Answered 2026-10-25. Block group version: decisions 5–9. Tract version: decisi
 5. Build the `lib/` changes (issues 3–7). Compile `pipeline/indicators/median_household_income_tract_2010.py` and `…_tract_2024.py`.
 6. Run validation, known-answer tests and invocation tests, and produce the outputs. Write the go/no-go summary. 🛑 **Stop C:** the expert reviews, sets `min_overlap`, and decides on 4b.
 7. Retro per the working method.
+
+#### Stop B notes (2026-10-25)
+
+**Task 3 done.** Rename (design issue 1): the four specs and two code files moved, titles name the ACS period, all four back to `draft`. The titles changed the spec hashes, so both code headers were regenerated (body unchanged, no `verified` line): **the expert re-verifies `population_count_2024` and `median_household_income_2024`.** The five renamed tables and maps are byte-identical to the old ones; `kat_001` and `kat_002` pass. Design issues 2–8 written into AGENTS.md rule 1, architecture.md §§ 2, 4, 4.2, 4.3 (new *matched* subsection), 4.4, 7, 10, 12, 13, the Crosswalk and Geography templates, and validation.md. `lib/` is task 5.
+
+**Task 4 drafts** (all `draft`): `census_api` (vintage 2010 added; About and Notes for 2010; back to `draft`), `census_tract_relationship_2020_2010`, `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020`, `median_household_income_tract_2010`, `median_household_income_tract_2024`, `map_median_household_income_tract_2010__tract_2020`; every `index.md`; `kat_003`, `kat_004`, `inv_006`–`inv_008`. Validation now has 4 errors, all expected until task 5: `matched` isn't a known method yet, and the two new Indicators have no compiled code. With `--network`: the official labels of all three `B19013_001E` fields match the specs. The publication check for `median_household_income_tract_2010` can't run until `lib/` reads `GEO_ID` (task 5). Other publication and `variables.json` checks failed only intermittently, because the Census API was timing out on 2026-10-25; the direct requests in task 2 show both vintages are published at tract level. Rerun at Stop C.
+
+**Questions for the expert**
+
+1. **`fields` on a `matched` Crosswalk (new, not in the approved design).** The builder has to know which relationship-file columns to read, and the tract and block group files name them differently (`GEOID_TRACT_20` vs `GEOID_BLKGRP_20`). Proposed: the Crosswalk names them in `fields: { from_id, to_id, from_area, to_area, shared_area }`, which keeps rule 3 (fields are named in an Indicator or Crosswalk) and lets the offline field check cover them. Alternative: `lib/` derives them from the `census_unit`; less to write, but hidden.
+2. **Title of `population_count_2024`:** "Total population, 2020–2024", without "by block group", because it's also reported for the city. The income Indicators name their unit.
+3. **Name fields:** `tract_2020` uses `NAMELSAD` ("Census Tract 1114.01"); `tract_2010` uses `NAME` ("1114.01"; the 2010 file has no `NAMELSAD`). Only the 2020 names appear on the map.
+4. **`kat_003`:** in the city, only one matched 2020 tract has a different GEOID from its 2010 tract: `39035197400` ← `39035106300`, overlap 99.99% / 83.1%. It only matches at `min_overlap` below 0.83, so it has to be replaced if the threshold goes up. Expected values for `kat_003` (36591 ± 5794) and `kat_004` (38083 ± 13217) were read by the agent from the Census API; please confirm.
+5. **Early look for the go/no-go** (from the agent's checks of the source files, not from the pipeline; the formal summary is at Stop C): about 159 2020 tracts and 177 2010 tracts are inside the city by the majority-area rule, and about 136 2020 tracts match at 0.80.
 
 #### Task 2 findings (2026-10-25)
 
@@ -396,5 +410,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4a requirements and design issues 1–7. Decisions 5–9: 2006–2010; Census relationship file, `min_overlap` 0.80; ask and name the available years when several vintages match; 2010 map included; `population_count` renamed. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (source checks). Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Task 1: plan committed on `main`, branch `chunk/04a-bg-2010-income` created. Task 2: 2010 cartographic block groups and the relationship file confirmed; the Census API has no block group data for vintage 2010 (block groups begin at 2013). Stopped, per task 2. | 🛑 Expert chooses the 2006–2010 data source (summary file, NHGIS, 2009–2013, or tracts). Then finish task 2 for that source. |
 | 2026-10-25 | Claude Code | Task 1b: branch renamed `chunk/04a-tract-2010-income`, redraft committed. Task 2 (tracts): API serves 2010 and 2024 tracts; 2010 codes match 2024's; 2010 and 2020 cartographic tract files and the tract relationship file confirmed (*Task 2 findings* 5–9). | Task 3: design issues 1–8, rename first. |
+| 2026-10-25 | Claude Code | Task 3: rename done (outputs byte-identical, `kat_001`/`kat_002` pass; code needs re-verification); design issues 2–8 in docs. Task 4: specs, indexes, `kat_003`, `kat_004`, `inv_006`–`inv_008` drafted. Proposed `fields` on `matched` crosswalks. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–5. Then task 5 (`lib/`, compile). |
 | 2026-10-25 | Chat | Expert chose tracts after task 2 (decision 10). Rewrote chunks 4a and 4b for tracts: `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020` (`matched`, 0.80), `median_household_income_tract_2010` and `…_tract_2024`, 2010 tract map; design issue 8 (naming for a second Census unit); `kat_004`; `inv_006`–`inv_008` reworded. | 🛑 Stop A again (tract version, Stop A question 1). Then Claude Code: task 1b, task 2 for tracts. |
 | 2026-10-25 | Chat | ✅ Stop A passed for the tract version: expert approved chunk 4a (tracts) requirements and design issues 1–8. Decision 11: `<measure>_tract_<year>` naming. | Claude Code: task 1b (rename the branch to `chunk/04a-tract-2010-income`, commit), then task 2 for tracts. Stop B after specs are drafted. |

@@ -32,3 +32,31 @@ source: ACS 2020–2024 5-year, B19013_001, Block Group 2, Census Tract 1198, Cu
 
 Value proposed by the agent from the Census Data API (`acs/acs5` 2024, `B19013_001E` and `_001M`), chosen as a block group near the middle of Cleveland's values with a published, uncoded estimate and MOE. Confirmed by the expert 2026-10-24. The value is passed through unchanged, so this tests fetching, the GEOID join and the output, not a method.
 
+
+## kat_003 — Median household income 2006–2010, one matched 2020 tract
+
+```yaml
+indicator: median_household_income_tract_2010
+geography: tract_2020
+unit: "39035197400"              # Census Tract 1974 (2020), matched to 2010 Census Tract 1063 (39035106300)
+expected: 36591
+expected_moe: 5794
+tolerance: exact
+source: ACS 2006–2010 5-year, B19013_001, Census Tract 1063, Cuyahoga County, Ohio — https://data.census.gov/table/ACSDT5Y2010.B19013?g=1400000US39035106300 (accessed 2026-10-25)
+```
+
+Value proposed by the agent from the Census Data API (`acs/acs5` 2010, `B19013_001E` and `_001M`, tract `106300`). Awaiting the expert's confirmation. In the tract relationship file, the two tracts share 99.99% of the 2010 tract's land area and 83.1% of the 2020 tract's, so they match at `min_overlap` 0.80 but not at 0.90. It's the only matched pair inside the city whose GEOIDs differ, so this test covers the match, not only the fetch. At a `min_overlap` above 0.83 the tract is blank, and this test has to be replaced.
+
+## kat_004 — Median household income 2020–2024, one tract
+
+```yaml
+indicator: median_household_income_tract_2024
+geography: tract_2020
+unit: "39035198500"              # Census Tract 1985, Cuyahoga County
+expected: 38083
+expected_moe: 13217
+tolerance: exact
+source: ACS 2020–2024 5-year, B19013_001, Census Tract 1985, Cuyahoga County, Ohio — https://data.census.gov/table/ACSDT5Y2024.B19013?g=1400000US39035198500 (accessed 2026-10-25)
+```
+
+Value proposed by the agent from the Census Data API (`acs/acs5` 2024, `B19013_001E` and `_001M`, tract `198500`), chosen as the tract nearest the middle of Cleveland's tract values with a published, uncoded estimate and MOE. Awaiting the expert's confirmation. The value is passed through unchanged, so this tests the tract fetch, the GEOID join and the output.
