@@ -67,7 +67,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Staleness detection (code vs. results) (chunk 1)
 - ☑ Known-answer tests (chunk 1)
 - ☑ Run mode (chunk 1)
-- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24; `inv_001`–`inv_003` passed after approval in chunk 2; `inv_001`–`inv_005` in chunk 3; `inv_001`–`inv_008` in chunk 4a; `inv_001`–`inv_010` in chunk 4b)
+- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24; `inv_001`–`inv_003` passed after approval in chunk 2; `inv_001`–`inv_005` in chunk 3; `inv_001`–`inv_008` in chunk 4a; `inv_001`–`inv_010` in chunk 4b; `inv_001`–`inv_012` in chunk 5)
 
 **Resources & geographies**
 - ☑ API resource (Census Data API) (chunk 1)
@@ -83,169 +83,52 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Geography on 2010 boundaries (`GEO_ID` read as the GEOID) (chunk 4a)
 
 **Indicators**
-- ☑ Count, with margin of error (chunk 1)
+- ☑ Count, with margin of error (chunk 1; at tracts and through `matched` in chunk 5)
 - ☐ Percent or rate (counts first, then rate)
 - ☑ Reliability flag (chunk 1); suppress not yet
 - ☑ Median or other custom aggregation (chunk 4a: a median through a `matched` crosswalk, `# Aggregation`)
 - ☑ Indicator that builds on other Indicators (chunk 4b: `builds_on` start and end, `ctx.indicator`, `indicator_inputs` staleness)
-- ☑ Percent change over time, with an inflation factor (chunk 4b: `measure: percent_change`, `inflation`, no MOE)
+- ☑ Percent change over time, with an inflation factor (chunk 4b: `measure: percent_change`, `inflation`, no MOE; counts with no `inflation` in chunk 5)
 - ☑ Caveats in manifests (chunk 4b: `percent_change` tables and their maps)
 - ☑ Selection of points (`measure: points`, `window` in local dates) (chunk 3)
 - ☐ Point aggregation
 
 **Crosswalks**
 - ☑ `nested` (chunk 1: only `from.within == to` with one target unit)
-- ☑ `matched` (chunk 4a: 2010 → 2020 tracts, reciprocal land-area overlap, `min_overlap` 0.80)
+- ☑ `matched` (chunk 4a: 2010 → 2020 tracts, reciprocal land-area overlap, `min_overlap` 0.80; a count in chunk 5)
 - ☐ `population_weighted`
 - ☐ `areal` / `centroid`
 
 **Visualizations**
 - ☑ Choropleth with tooltips (chunk 1)
 - ☑ Hexbin heat map, 250 m privacy floor (chunk 3)
-- ☑ Manual classification with a diverging scheme (chunk 4b: breaks around 0, `RdBu`, signed percents)
+- ☑ Manual classification with a diverging scheme (chunk 4b: breaks around 0, `RdBu`, signed percents; tooltip by the inputs' unit in chunk 5)
 
 ---
 
 ## Current chunk
 
-### Chunk 5 — Change in tract population, 2006–2010 to 2020–2024
-
-**Analysis question:** what is the population count by census tract in 2006–2010 and in 2020–2024, and what is the percent change? The change is reported on 2020 tracts.
-
-**Brief:** chunk 4a–4b's pattern, repeated for a count. No new kind of capability.
-- Three Indicators: the 2006–2010 tract count (moved to 2020 tracts by 4a's `matched` crosswalk), the 2020–2024 tract count, and a `percent_change` Indicator that `builds_on` both.
-- It bends "one chunk, one analysis question" slightly (three Indicators), accepted by the expert because each is a copy of an approved pattern.
-- What's new is small: the first count through a `matched` crosswalk, and the first `percent_change` with no `inflation` and inputs that aren't dollars.
-
-**Branch:** `chunk/05-tract-population-change`
-
-**Status:** ✅ Stops A, B and C passed 2026-10-25 (decision 7). 🛑 Next: the expert runs `inv_001`–`inv_012` in fresh sessions. Then task 7 (retro).
-
-**Exercises (capability checklist):** no new items. Extends `matched` (first count), `percent_change` (no `inflation`, `unit: count`) and the change choropleth (count formatting).
-
-_Place and unit words in this section are requirements. They do not go into the Indicator body (chunk 2, design issue 5)._
-
-#### Requirements
-
-**Specs to draft** (all `status: draft`)
-
-| ID | Type | Settings |
-|---|---|---|
-| `population_count_tract_2010` | Indicator | Copy of `population_count_2024`'s body with the period changed. `measure: count`; `geography: tract_2010`; `crosswalks: [tract_2010__to__tract_2020]`; `data`: `census_api`, `acs/acs5`, vintage 2010, `B01003_001E` Total population; `reliability` 0.30, flag. Caveats as `median_household_income_tract_2010`'s that apply to a count (controls of the time, matched by land area). |
-| `population_count_tract_2024` | Indicator | Same as `population_count_2024` with `geography: tract_2020` and no `crosswalks` (like `median_household_income_tract_2024`). |
-| `population_count_tract_pct_change_2010_2024` | Indicator | `measure: percent_change`; `geography: tract_2020`; `builds_on: [population_count_tract_2010, population_count_tract_2024]` (start first, end second); no `data`, `crosswalks`, `reliability`, `unit` or `inflation`. |
-| `map_population_count_tract_pct_change_2010_2024__tract_2020` | Visualization | `indicator`: the change Indicator; `geography: tract_2020`; `classification: manual`; `classes: 10`; `breaks: [-20, -15, -10, -5, 0, 5, 10, 15, 20]` (decision 3; tunable at Stop C); `colors: RdBu` (`d3.schemeRdBu[10]`), red for decline to blue for increase. `# Source note`: "Change is not tested for statistical significance." |
-
-Used unchanged: `census_api` (2010 and 2024 vintages already approved), `tract_2010`, `tract_2020`, `tract_2010__to__tract_2020`, `census_tract_relationship_2020_2010`, `cle_city`.
-
-**Computation** (change Indicator body, without place names): as `median_household_income_tract_pct_change_2010_2024` steps 1 and 3–6, with no inflation step. `start` is the start Indicator's count as published.
-
-**Caveats** (change Indicator `# Caveats`, without place names; copied into its manifests)
-- **Not tested for statistical significance, and no MOE** (chunk 4b decision 8 carried). The inputs' MOEs are in `start_moe` and `end_moe`.
-- Only units matched one to one between the two boundary vintages have a value. The match is by land area, not by where people live: people in the up to `1 − min_overlap` of land the two units don't share count in one period and not the other.
-- The 2006–2010 estimates were controlled to the population estimates of the time, not to the 2010 census counts; the 2020–2024 estimates to estimates based on the 2020 census. Part of a change can come from the controls, not from people moving.
-- The 2020–2024 period includes 2020, when ACS data collection was disrupted.
-- A start of 0 gives no change (`lib/change.py` already notes it).
-
-**Outputs** (each with its manifest)
-- `outputs/tables/population_count_tract_2010__tract_2010.csv`, `…_tract_2010__tract_2020.csv`
-- `outputs/tables/population_count_tract_2024__tract_2020.csv`
-- `outputs/tables/population_count_tract_pct_change_2010_2024__tract_2020.csv`
-- `outputs/visualizations/map_population_count_tract_pct_change_2010_2024__tract_2020.html`
-
-**Expected size** (sanity check at Stop C, not a known-answer test)
-- 177 rows at `tract_2010`; 159 at `tract_2020` for each of the other tables.
-- **136 values** for the 2006–2010 count at `tract_2020` and for the change: the matched 2020 tracts (4a build file), unless a 2010 count is blank or 0. More than the income change's 130, because counts aren't suppressed or top-coded.
-- Of the 136 matched pairs, 93 share at least 99.9% of both tracts' land, 114 at least 99%; 5 are below 95% and 2 below 90% (the lowest, 83.1%, is the `kat_003` tract). So the land-area caveat bears on a handful of tracts.
-- The 2020–2024 tract counts add up to roughly the block group city total (366,340), not exactly: the majority-area rule keeps different units at each level.
-
-**Tests**
-- **Spec validation** passes for the whole project, including design issue 2's checks.
-- **`kat_006`**: `population_count_tract_2010` at `tract_2020` for `39035197400` (the `kat_003` tract, matched to 2010 tract 106300, the only in-city pair whose GEOIDs differ). Expected: the published 2006–2010 B01003 value and MOE for tract 106300, read in task 4. `tolerance: exact`. A trusted published value, through the matched path.
-- **`kat_007`**: the change Indicator at the same tract, computed by hand from the two input tables; `tolerance: absolute 0.01`. Not a trusted published value (like `kat_005`, an accepted exception to validation.md § 2).
-- Both break if `min_overlap` rises above 0.83, like `kat_003` and `kat_005`.
-- `kat_001`–`kat_005` still pass. The income change table and map stay byte-identical apart from `created` and `lib_hash`.
-- **Invocation** (run after approval, validation.md § 3):
-  - `inv_011`, change runs. Prompt: "How has population changed by census tract since 2010?" `expected: runs`, `spec: population_count_tract_pct_change_2010_2024`. Reports the table without describing or ranking places.
-  - `inv_012`, no period named. Prompt: "What is the population of each census tract in Cleveland?" `expected: asks`. Two Indicators match (2006–2010 and 2020–2024); the agent names both periods and runs nothing until answered. It doesn't default to the latest.
-  - Existing `inv_001`–`inv_010` still pass.
-
-**Not in this chunk:** maps of the two vintage counts; an MOE or significance test for the change; block groups (no 2006–2010 data); a city total from tracts; a `population_weighted` crosswalk.
-
-#### Design issues
-
-Found by checking the requirements against architecture.md, the templates and `lib/`. `lib/change.py` already treats a missing `inflation` as a factor of 1, so the change math needs no change.
-
-1. **`percent_change` beyond dollars** (§§ 4.4, 4.5, 12 *Output tables*; Indicator template).
-   - Docs say `start` is "in the end year's dollars". Reword: `start` and `start_moe` are multiplied by the inflation factor when there is one; otherwise they're the start Indicator's values as published.
-   - `lib/choropleth.py` (the change map is in, decision 3): the change tooltip hard-codes dollars and "Start, in end-year dollars". Format `start` and `end` by the inputs' `unit` (count: "12,345"), and say "in end-year dollars" only with `inflation`. The income change map's page must not change.
-   - New compiled code reads `inflation` with `.get`; the 4b code is pinned and left alone.
-2. **Validator** (`lib/validate.py`, validation.md): a `percent_change` Indicator's two `builds_on` Indicators have the same `unit` (missing = `count`); `inflation` only when that unit is `dollars`. Small; it catches a copied spec that keeps the income factor.
-3. **Counts through `matched`** (§ 12 *Uncertainty*, docs only): the "counts through a crosswalk" bullet gives the weighted-sum formula. Add that through `matched` a count is copied unchanged, with its MOE, as § 4.3 says for any measure. `lib/` already does this.
-
-Proposed: apply 1–3 after task 2, before drafting specs.
-
-#### Stop A questions
-
-Answered 2026-10-25. Recorded as decisions 3–5.
-
-#### Tasks
-
-1. Commit the chunk 5 plan (this roadmap) on `main`, then create `chunk/05-tract-population-change` from `main`.
-2. **Source check** (network): `B01003_001E` and `_001M` exist in `acs/acs5` 2010 and 2024 at tract level; the 2010 tract codes in the city match `tract_2010`'s GEOIDs, as they did for B19013. 🛑 Stop if not.
-3. Apply design issues 1–3. Check existing outputs are unchanged apart from `created` and `lib_hash`, and `kat_001`–`kat_005` pass.
-4. Draft the specs, update each folder's `index.md`, add `kat_006`, `kat_007`, `inv_011`, `inv_012`. 🛑 **Stop B.**
-5. Compile the three Indicators (`population_count_tract_2024.py` may share `population_count_2024.py`'s reviewed body, as the income tract code did). Build design issue 1's tooltip change.
-6. Run validation and known-answer tests; produce the outputs; check the expected size; tune the breaks with the expert. 🛑 **Stop C:** the expert reviews and approves; then the invocation tests in fresh sessions.
-7. Retro per the working method.
-
-#### Stop B notes
-
-Results of tasks 2–4 (2026-10-25):
-- **Source check passed.** `B01003_001E` exists in `acs/acs5` 2010 and 2024 with `_001M` as an attribute; every `tract_2010` and `tract_2020` GEOID is in the API's Cuyahoga tract list; no in-city row has a null or annotation. In-city sums: 409,357 (2006–2010, 177 tracts) and 366,340 (2020–2024, 159 tracts).
-- **Design issues 1–3 applied** to architecture.md §§ 4.4, 4.5, 7, 12, the Indicator template, validation.md, `lib/change.py` (docstring) and `lib/validate.py` (unit check). The tooltip change in `lib/choropleth.py` is task 5. Every existing table, map and build file is byte-identical; manifests differ only in `created`, `lib_hash` and `fingerprint` (which includes `lib_hash`). `kat_001`–`kat_005` pass. A negative test of the new check (mixed units; `inflation` on counts) gives both errors.
-- **Validation:** 0 errors apart from the three "no compiled code" errors expected before task 5; the `--network` field check is clean.
-
-Questions (recommendation first):
-1. **Expected size: 134 changes, not 136.** Two matched 2010 tracts (980100, 980500) have a count of 0, so their change is blank with "2006–2010: estimate is 0". The 2006–2010 count at `tract_2020` still has 136 values. The plan's "unless a 2010 count is blank or 0" covers it; recorded so Stop C checks 134.
-2. **`kat_007` is near 0** (3,805 ÷ 3,809 − 1 = −0.105%). It still tells start from end (swapped gives +0.105%, outside the 0.01 tolerance) and goes through the only in-city pair whose GEOIDs differ. Recommend keep.
-3. **Titles** name the unit, like the income tract specs: "Total population by census tract, 2006–2010" etc. The block group count keeps "Total population, 2020–2024". Recommend keep.
-4. **`population_count_tract_2010` caveats:** sample/MOE, controls of the time, matched by land area (people, not households), unmatched units blank, counts reflect size. Left out the income spec's coding and too-few-cases caveats, which don't apply to B01003.
-
-#### Stop C notes
-
-Results of tasks 5–6 (2026-10-25):
-- **Code:** `population_count_tract_2010.py` and `population_count_tract_2024.py` have `population_count_2024.py`'s reviewed body (only the header and docstring differ). `population_count_tract_pct_change_2010_2024.py` is the income change code without the inflation step; it reads `inflation` with `.get`.
-- **`lib/`** (needs review): `choropleth.draw` takes `inflation`; the change tooltip formats `start` and `end` by the inputs' unit (`dollars` or `count`; another unit stops with "isn't built yet") and says "Start, in end-year dollars" only with `inflation`. `runner` passes a change map the first input's unit. The count map's tooltip reads "Start: 3,809", "End: 3,805".
-- **Tests:** validation 0 errors (warnings only for draft specs and unverified code); `kat_001`–`kat_007` pass (`kat_006` 3,809 exact; `kat_007` −0.105). Every existing table, map and build file is byte-identical, including the income change map; manifests differ only in `created`, `lib_hash` and `fingerprint`.
-- **Expected size:** matches. 177 rows at `tract_2010`; 159 at `tract_2020` for each other table; 136 values for the 2006–2010 count at `tract_2020`; **134** for the change (23 "no matching 2010 tract", 2 "estimate is 0"). In the change table, `start` equals the 2006–2010 table and `end` the 2020–2024 table for every unit. The 2020–2024 tract sum is 366,340, the same as the block group city total (the plan expected roughly equal).
-
-Questions:
-1. **Breaks** (decision 3, tunable now). Tracts per class, lowest to highest, of 134: 45, 11, 7, 16, 12, 13, 8, 10, 4, 8. Range −65.1% to +293.1%, median −8.6%. The bottom class (below −20%) holds 45. Keep, or widen the outer breaks (e.g. −40, −30, −20, −10, 0, +10, +20, +30, +40)?
-2. **Approval:** set the four specs `stable` and mark the three code files `verified`.
-
-#### Decisions (expert, 2026-10-25)
-
-Carried from chunks 4a–4b: one Indicator per vintage (§ 4.4); the tract unit before the year in IDs; `matched` at `min_overlap` 0.80; `percent_change` with no MOE or significance test; caveats in the change Indicator's manifests; "take the simpler option when in doubt".
-
-From the chunk 5 brief:
-1. **Three Indicators in one chunk** is acceptable: each is a copy of an approved pattern.
-2. **The change is reported on 2020 tracts.**
-
-Stop A (2026-10-25):
-3. **Change map:** yes. Manual breaks at −20, −15, −10, −5, 0, +5, +10, +15, +20 % (10 classes), `RdBu`, red for decline to blue for increase. Tunable at Stop C.
-4. **Counts through the `matched` crosswalk at `min_overlap` 0.80:** accepted, with the land-area caveat. No higher threshold, no `population_weighted` crosswalk.
-5. **Known-answer tests:** `kat_006` (published, exact) and `kat_007` (by hand, an accepted exception to validation.md § 2). Not answered separately; taken as approved with Stop A, as recommended.
-
-Stop B (2026-10-25):
-6. **Specs approved for compiling**; Stop B notes 1–4 accepted (134 changes; keep `kat_007`; titles name the unit; the 2006–2010 count's caveats). The change Indicator names no `crosswalks`: its inputs are already at `tract_2020`, a percent change is never moved through a crosswalk (§ 4.4), and the crosswalk reaches its manifests through the graph.
-
-Stop C (2026-10-25):
-7. **Approved:** breaks kept as in decision 3; the four specs `stable`; the three code files `verified`; the `lib/` changes (change tooltip by input unit) accepted.
+_None. The next chunk is defined in chat with the expert (step 1 of the working method)._
 
 ---
 
 ## Completed chunks
+
+### Chunk 5 — Change in tract population, 2006–2010 to 2020–2024   (merged 2026-10-25)
+Delivered:
+  - Specs (all `stable`): `population_count_tract_2010` (`tract_2010`, `matched` to `tract_2020`), `population_count_tract_2024`, `population_count_tract_pct_change_2010_2024` (`percent_change`, no `inflation`), `map_population_count_tract_pct_change_2010_2024__tract_2020` (manual breaks −20 … +20, 10 classes, `RdBu`, source note on significance).
+  - Code (all verified): the two count files share `population_count_2024.py`'s reviewed body; the change file is the income change code without the inflation step, reading `inflation` with `.get`. `lib/`: the change tooltip formats start and end by the inputs' unit and says "in end-year dollars" only with `inflation` (`choropleth`, `runner`); validator checks that a change's inputs share a `unit` and that `inflation` goes with dollars only; `change.py` docstring.
+  - Outputs: 2006–2010 counts at `tract_2010` (177) and `tract_2020` (159, 136 with a value), 2020–2024 counts at `tract_2020` (159), the change table (159, 134 with a value; median −8.6%) and map, each with a manifest.
+  - Tests: `kat_006` (exact, 3,809 ± 499, through the matched pair whose GEOIDs differ) and `kat_007` (by hand, −0.105, accepted exception) added; `kat_001`–`kat_007` pass. `inv_011`, `inv_012` added; `inv_001`–`inv_012` passed in fresh sessions after approval.
+Retro:
+  - Worked: three Indicators copied from approved patterns needed no new kind of capability and no change to `specs.py`, `compiled.py`, `snapshot.py`, `crosswalk.py` or `change.py`'s math. Every existing table, map and build file stayed byte-identical through the `lib/` changes, including the income change map's page. The expected size, worked out in chat, matched: 177, 159, 136. The task 2 source check also looked for zero counts, which settled the change's count before anything was built.
+  - Broke: nothing in the specs or code. The plan's 136 for the change was 134: two matched 2010 tracts have a count of 0 (the plan's "unless … 0" covered it; found in task 2). The plan expected the 2020–2024 tract sum to be roughly the block group city total; it is exactly 366,340. The source-check script first failed because `python -I` drops the project from the path (agent's slip). `--force` on the change map recomputed only the change, so the two input tables' manifests still recorded `draft` until each was forced on its own.
+  - Agent needed correction on: nothing. The expert asked why the change Indicator names no `crosswalks`; answered from § 4.4 (its inputs are already at `tract_2020`; a percent change is never moved; the crosswalk reaches its manifests through the graph), no change.
+  - Open points: `kat_003`, `kat_005`, `kat_006` and `kat_007` all break if `min_overlap` rises above 0.83. `--force` doesn't reach `builds_on` inputs (refreshing manifests after approval needs each Indicator forced). A change map of inputs other than dollars or counts stops with "isn't built yet". The bottom class (below −20%) holds 45 of 134 tracts (expert: keep the breaks).
+Design changes:
+  - Before building (design issues 1–3): `percent_change` beyond dollars, `start` as published without `inflation`, the tooltip by the inputs' unit (architecture.md §§ 4.4, 4.5, 7, 12; Indicator template); same-unit and dollars-only `inflation` checks (validation.md); counts through `matched` copied unchanged (§ 12 *Uncertainty*).
+  - In the retro: nothing further.
+  - Existing work brought in line: nothing needed. The income change spec has dollar inputs with `inflation`; its pinned code is left alone; validation clean with no warnings; existing outputs unchanged.
 
 ### Chunk 4b — Change in tract median household income, 2006–2010 to 2020–2024   (merged 2026-10-25)
 Delivered:
@@ -410,3 +293,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | Chunk 5 tasks 1–4: plan committed, branch created; source check passed (B01003 at tract level, 2010 and 2024); design issues 1–3 applied, existing outputs unchanged, `kat_001`–`kat_005` pass; three Indicators and the change map drafted; `kat_006` (3,809 ± 499), `kat_007` (−0.11), `inv_011`, `inv_012` added. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–4. Then task 5. |
 | 2026-10-25 | Claude Code | Stop B passed (decision 6). Task 5: three Indicators compiled; change tooltip formats start and end by the inputs' unit. Task 6: validation clean, `kat_001`–`kat_007` pass, existing outputs byte-identical, expected size matches (136 and 134 of 159). | 🛑 Stop C: expert reviews code and `lib/`, tunes breaks (*Stop C notes* 1), approves. Then invocation tests in fresh sessions. |
 | 2026-10-25 | Claude Code | Expert approved chunk 5 (decision 7): breaks kept, 4 specs `stable`, 3 code files `verified`. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the change map; `kat_006`, `kat_007` pass. | 🛑 Expert runs `inv_001`–`inv_012` in fresh sessions. Then task 7 (retro). |
+| 2026-10-25 | Claude Code | Expert ran `inv_001`–`inv_012` in fresh sessions; all pass. Task 7: retro recorded, checklist updated (counts through `matched`, percent change of counts, tooltip by unit), `chunk/05-tract-population-change` merged into `main`. | Define the next chunk in chat. |
