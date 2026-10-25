@@ -11,10 +11,10 @@ status: draft                                # draft | stable (only the expert s
 map: choropleth                              # (optional) choropleth (default) | hexbin
 indicator: housing_cost_burden_pct           # sets the color; hexbin: a points Indicator
 geography: cle_neighborhoods                 # must be one the indicator is reported at; hexbin: its clip extent
-classification: quantile                     # quantile | equal_interval | natural_breaks | manual
-classes: 5
+classification: quantile                     # quantile | equal_interval | natural_breaks | manual | categorical (cluster Indicators only)
+classes: 5                                   # categorical: the Indicator's k
 breaks: []                                   # (manual only) break values, lowest to highest
-colors: YlOrRd                               # a d3-scale-chromatic scheme name
+colors: YlOrRd                               # a d3-scale-chromatic scheme name; categorical: a categorical scheme with at least k colors, e.g. Tableau10
 also_show: []                                # (optional, choropleth only) other Indicators to add to the tooltip
 hex_size_m: 500                              # (hexbin only) hex width across flats in metres; at least 250
 ---

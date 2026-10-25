@@ -9,10 +9,10 @@ description: Share of households spending 30% or more of income on housing costs
 status: draft                                # draft | stable (only the expert sets stable)
 tags: [housing]                              # (optional)
 
-measure: percent                             # percent | rate | count | median | index | points | percent_change
-unit: count                                  # (optional) count (default) | dollars; for display only; not for points
+measure: percent                             # percent | rate | count | median | index | points | percent_change | cluster
+unit: count                                  # (optional) count (default) | dollars; for display only; not for points, percent_change or cluster
 geography: bg_2020                           # calculated (and reported) here; for points, the clip extent
-crosswalks:                                  # (optional) also reported at each crosswalk's target; not for points
+crosswalks:                                  # (optional) also reported at each crosswalk's target; not for points, percent_change or cluster
   - bg_2020__to__tract_2020
   - bg_2020__to__cle_neighborhoods
   - bg_2020__to__cle_city
@@ -30,7 +30,7 @@ data:                                        # (optional with builds_on) exactly
       B25070_011E: Not computed
       # … plus the owner-cost fields from B25091 (example only — not vetted)
 
-builds_on: []                                # (optional) other Indicators this one uses, reported at its geography; percent_change: [start, end]
+builds_on: []                                # (optional) other Indicators this one uses, reported at its geography; percent_change: [start, end]; cluster: two or more, the first sets the numbering
 reliability:                                 # (optional) survey data only; not for points
   cv_threshold: 0.30                         # CV above this = low reliability
   low: flag                                  # flag (keep and mark) | suppress (leave blank)
@@ -44,6 +44,11 @@ inflation:                                   # (optional, percent_change of doll
   to: { year: 2024, value: 462.511 }
   source: https://www.bls.gov/cpi/research-series/r-cpi-u-rs-allitems.xlsx
   retrieved: 2026-10-25
+cluster:                                     # (cluster only) k-means over the builds_on inputs
+  method: kmeans                             # kmeans
+  k: 5                                       # number of clusters, 2 to 10
+  seed: 0                                    # a whole number
+  log: [median_household_income_tract_2024]  # (optional) inputs to take the natural log of, each in builds_on
 ---
 
 <!-- The body is about the measure, not the place: no place names, unit types, or Geography or
