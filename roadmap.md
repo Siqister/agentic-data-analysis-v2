@@ -117,7 +117,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/04b-tract-income-change`
 
-**Status:** ✅ Stop A passed 2026-10-25. Tasks 1–2 done (factor 462.511 ÷ 319.8; see *Task 2 findings*). Next: task 3.
+**Status:** ✅ Stop A passed 2026-10-25. Tasks 1–4 done. 🛑 **Stop B:** the expert reviews the drafted specs and *Stop B notes*.
 
 **Exercises (capability checklist):**
 - New items to add: Indicator that builds on other Indicators; `percent_change` measure; manual classification with a diverging scheme; caveats in manifests.
@@ -210,6 +210,19 @@ Answered 2026-10-25. Recorded as decisions 7–12.
 5. Build the `lib/` changes. Compile `pipeline/indicators/median_household_income_tract_pct_change_2010_2024.py`.
 6. Run validation and known-answer tests, and produce the outputs. Check the expected size. Tune the breaks with the expert by editing frontmatter. 🛑 **Stop C:** the expert reviews and approves; then the invocation tests run in fresh sessions.
 7. Retro per the working method. Remove *Change over time* from architecture.md § 13.
+
+#### Stop B notes (2026-10-25)
+
+**Task 3 (docs only; `lib/` is task 5, after Stop B, as in 4a):** design issues 1–7 written into AGENTS.md rule 3 (the `inflation` exception), architecture.md §§ 4 (fields), 4.4 (`percent_change`, `builds_on`, `data` optional, change Indicators and `inflation` under *Vintages and change over time*), 4.5 (source note and tooltip for `percent_change`), 7 (Change helper, runner), 8 (`indicator_inputs`, `caveats`), 12 (start/end columns, signed display); the Indicator template; validation.md (three new Indicator checks). The check that existing outputs are unchanged moves to task 5, when `lib/` changes.
+
+**Task 4 drafts** (both `draft`): `median_household_income_tract_pct_change_2010_2024`, `map_median_household_income_tract_pct_change_2010_2024__tract_2020`; both `index.md` files; `kat_005` (tract `39035197400`, the `kat_003` tract: 43913 ÷ (36591 × 1.44625) − 1 = **−17.02%**); `inv_008` changed to `runs`; `inv_009`, `inv_010` added. Validation has 3 errors, all expected until task 5 (`percent_change` unknown, `data` still required, no compiled code).
+
+**Questions for the expert**
+
+1. **2024 index value:** 462.511 (three decimals, like the monthly values), or the table's stored 462.51116666666667? It changes any percent change by under 0.0001 points.
+2. **Period in the blank-input note** ("2006–2010: no matching 2010 tract"): proposed, `lib/change.py` derives it from each input's ACS 5-year vintage (vintage − 4 to vintage). Alternative: from the end of the input Indicator's title. When both inputs are blank, the note gives both, start first, joined by "; ".
+3. **`inv_009`** also says the agent must not run the tract map instead without asking. OK?
+4. **Indicator title:** "Change in median household income by census tract, 2006–2010 to 2020–2024 (%)", with "(%)" as in the template's example; the map's title has no "(%)".
 
 #### Task 2 findings (2026-10-25)
 
@@ -377,5 +390,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | Expert approved: 12 specs `stable`, 4 code files `verified`, `min_overlap` 0.80. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the 2010 map; `kat_001`–`kat_004` pass. | 🛑 Expert runs `inv_001`–`inv_008` in fresh sessions; decides on 4b. Then task 7 (retro). |
 | 2026-10-25 | Claude Code | Expert ran `inv_001`–`inv_008` in fresh sessions: all pass. 4b goes ahead. Task 7: retro recorded, checklist updated (URL file Resource, second vintage, tracts, 2010 boundaries, median aggregation, `matched`), validation.md (invocation tests after approval), `chunk/04a-tract-2010-income` merged into `main`. | Write 4b requirements in chat, into Current chunk. |
 | 2026-10-25 | Claude Code | 4b task 1: plan committed on `main`, branch `chunk/04b-tract-income-change`. Task 2: R-CPI-U-RS from BLS's current file: 2010 = 319.8 (not 320.4), 2024 = 462.511; factor 1.44625. | Task 3: design issues 1–7. |
+| 2026-10-25 | Claude Code | 4b task 3: design issues 1–7 in docs. Task 4: change Indicator and map drafted, `kat_005` (−17.02%), `inv_008` → `runs`, `inv_009`, `inv_010`. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–4. Then task 5. |
 | 2026-10-25 | Chat | Wrote chunk 4b requirements into Current chunk: change Indicator (`percent_change`, `builds_on`, `inflation`), diverging map, design issues 1–7, Stop A questions 1–6, `kat_005`, `inv_008`–`inv_010`. Fixed the order of two chat rows in this log. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4b requirements and design issues 1–7. Decisions 7–12: `percent_change`; no MOE for the change; breaks ±5/10/15 % (8 classes, `RdBu`); start and end in the tooltip; manifest caveats for the change Indicator only; `kat_005` by hand. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (inflation factor). Stop B after specs are drafted. |
