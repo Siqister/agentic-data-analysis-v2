@@ -117,7 +117,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/04b-tract-income-change`
 
-**Status:** ✅ Stop A passed 2026-10-25. ✅ Stop B passed 2026-10-25 (decision 13). Tasks 5–6 done. 🛑 **Stop C:** the expert reviews `lib/` and code (*Stop C notes*), tunes the breaks if needed, and approves; then the invocation tests run in fresh sessions.
+**Status:** ✅ Stop A passed 2026-10-25. ✅ Stop B passed 2026-10-25 (decision 13). Tasks 5–6 done. Expert approved 2026-10-25 (decision 14). 🛑 **Stop C, remaining:** the expert runs `inv_001`–`inv_010` in fresh sessions. Then task 7 (retro).
 
 **Exercises (capability checklist):**
 - New items to add: Indicator that builds on other Indicators; `percent_change` measure; manual classification with a diverging scheme; caveats in manifests.
@@ -277,6 +277,9 @@ Stop A (2026-10-25):
 Stop B (2026-10-25):
 13. **Specs approved for compiling**, Stop B questions 1–4 as proposed: 2024 index value 462.511; the period in blank-input notes comes from each input's ACS 5-year vintage (both inputs blank: both notes, start first, joined by "; "); `inv_009` as drafted; "(%)" in the Indicator title. Expert's standing rule: **when in doubt, take the simpler option** (and note it at the next stop).
 
+Stop C (2026-10-25):
+14. **Approved:** `lib/` changes and the compiled change code reviewed; both specs `stable`, code `verified`. Breaks kept (−15, −10, −5, 0, +5, +10, +15); the source note keeps "Margins of error at 90% confidence."; the tooltip keeps the generic "Start, in end-year dollars".
+
 ---
 
 ## Completed chunks
@@ -419,5 +422,6 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | 4b task 1: plan committed on `main`, branch `chunk/04b-tract-income-change`. Task 2: R-CPI-U-RS from BLS's current file: 2010 = 319.8 (not 320.4), 2024 = 462.511; factor 1.44625. | Task 3: design issues 1–7. |
 | 2026-10-25 | Claude Code | 4b task 3: design issues 1–7 in docs. Task 4: change Indicator and map drafted, `kat_005` (−17.02%), `inv_008` → `runs`, `inv_009`, `inv_010`. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–4. Then task 5. |
 | 2026-10-25 | Claude Code | Stop B passed (decision 13). Task 5: `lib/change.py`, `builds_on` in the runner, start/end columns, caveats in manifests, `percent_change` choropleth, validator; change Indicator compiled. Task 6: validation clean, `kat_001`–`kat_005` pass, existing outputs byte-identical, expected size matches (130 of 159). | 🛑 Stop C: expert reviews `lib/` and code, breaks, questions 1–3; approves. Then invocation tests in fresh sessions. |
+| 2026-10-25 | Claude Code | Expert approved 4b (decision 14): 2 specs `stable`, change code `verified`; breaks, source note and tooltip kept. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the change map; `kat_005` passes. | 🛑 Expert runs `inv_001`–`inv_010` in fresh sessions. Then task 7 (retro). |
 | 2026-10-25 | Chat | Wrote chunk 4b requirements into Current chunk: change Indicator (`percent_change`, `builds_on`, `inflation`), diverging map, design issues 1–7, Stop A questions 1–6, `kat_005`, `inv_008`–`inv_010`. Fixed the order of two chat rows in this log. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 4b requirements and design issues 1–7. Decisions 7–12: `percent_change`; no MOE for the change; breaks ±5/10/15 % (8 classes, `RdBu`); start and end in the tooltip; manifest caveats for the change Indicator only; `kat_005` by hand. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (inflation factor). Stop B after specs are drafted. |

@@ -2,7 +2,7 @@
 type: Visualization
 title: Change in median household income by census tract, 2006–2010 to 2020–2024
 description: Choropleth of the percent change in median household income, in 2024 dollars, on 2020 census tracts in Cleveland.
-status: draft
+status: stable
 
 indicator: median_household_income_tract_pct_change_2010_2024
 geography: tract_2020

@@ -2,7 +2,7 @@
 type: Indicator
 title: Change in median household income by census tract, 2006–2010 to 2020–2024 (%)
 description: Percent change in median household income from the ACS 2006–2010 to the 2020–2024 5-year estimates, in 2024 dollars.
-status: draft
+status: stable
 tags: [income, change]
 
 measure: percent_change
