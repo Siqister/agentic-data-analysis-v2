@@ -67,7 +67,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Staleness detection (code vs. results) (chunk 1)
 - ☑ Known-answer tests (chunk 1)
 - ☑ Run mode (chunk 1)
-- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24; `inv_001`–`inv_003` passed after approval in chunk 2; `inv_001`–`inv_005` in chunk 3; `inv_001`–`inv_008` in chunk 4a; `inv_001`–`inv_010` in chunk 4b; `inv_001`–`inv_012` in chunk 5)
+- ☑ Invocation tests (chunk 1; `inv_001` and `inv_002` passed from the plain prompt in fresh sessions, 2026-10-24; `inv_001`–`inv_003` passed after approval in chunk 2; `inv_001`–`inv_005` in chunk 3; `inv_001`–`inv_008` in chunk 4a; `inv_001`–`inv_010` in chunk 4b; `inv_001`–`inv_012` in chunk 5; `inv_001`–`inv_014` in chunk 6a)
 
 **Resources & geographies**
 - ☑ API resource (Census Data API) (chunk 1)
@@ -89,7 +89,10 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Median or other custom aggregation (chunk 4a: a median through a `matched` crosswalk, `# Aggregation`)
 - ☑ Indicator that builds on other Indicators (chunk 4b: `builds_on` start and end, `ctx.indicator`, `indicator_inputs` staleness)
 - ☑ Percent change over time, with an inflation factor (chunk 4b: `measure: percent_change`, `inflation`, no MOE; counts with no `inflation` in chunk 5)
-- ☑ Caveats in manifests (chunk 4b: `percent_change` tables and their maps)
+- ☑ Caveats in manifests (chunk 4b: `percent_change` tables and their maps; `cluster` in chunk 6a)
+- ☑ Indicator built on three or more Indicators (chunk 6a: a feature vector per unit, in `builds_on` order)
+- ☑ Clustering (chunk 6a: `measure: cluster`, k-means with log and z-scores, numbered clusters, run-time checks, `clusters` manifest block, diagnostics build file)
+- ☑ Categorical value (chunk 6a: cluster number, with the inputs as columns)
 - ☑ Selection of points (`measure: points`, `window` in local dates) (chunk 3)
 - ☐ Point aggregation
 
@@ -103,187 +106,17 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 - ☑ Choropleth with tooltips (chunk 1)
 - ☑ Hexbin heat map, 250 m privacy floor (chunk 3)
 - ☑ Manual classification with a diverging scheme (chunk 4b: breaks around 0, `RdBu`, signed percents; tooltip by the inputs' unit in chunk 5)
+- ☑ Categorical choropleth (chunk 6a: `Tableau10`, legend with each cluster's profile, "not clustered" in gray)
+- ☐ Charts (scatter plots, cluster profile) (chunk 6b)
+
+**Dependencies**
+- ☑ A new third-party dependency, pinned (chunk 6a: scikit-learn 1.9.1; existing outputs unchanged)
 
 ---
 
 ## Current chunk
 
-### Chunk 6a — Tract clusters by income and population change (k-means)
-
-**Analysis question:** how do census tracts group by three characteristics: median household income in 2020–2024, the change in median household income, and the change in population, 2006–2010 to 2020–2024? Each tract that has all three values gets a cluster number, and the clusters are mapped.
-
-**Brief:** the first Indicator that combines several Indicators into one result, and the first categorical value.
-- One Indicator, `measure: cluster`, that `builds_on` three existing tract Indicators (a feature vector per tract), clustered with k-means in `lib/`; a categorical choropleth of it.
-- Built so that more inputs can be added later by editing `builds_on` (decision 1: the chunk tests the capability as much as the result).
-- Charts (scatter plots, a cluster profile chart) are split off into 6b (decision 4).
-
-**Branch:** `chunk/06a-tract-clusters`
-
-**Status:** ✅ Stop A passed 2026-10-25 (decisions 5–10). ✅ Stop B passed 2026-10-25 (decision 11). Tasks 5–6 done. ✅ Stop C passed 2026-10-25 (decision 12). 🛑 Next: the expert runs `inv_001`–`inv_014` in fresh sessions; then task 7 (retro).
-
-**Exercises (capability checklist):** new items: an Indicator built on three or more Indicators; clustering (`measure: cluster`, k-means) with a diagnostics build file; a categorical value; a categorical choropleth; a new third-party dependency. That's more than one new kind of capability. They come as one unit (a cluster Indicator needs a categorical map to be seen), so the chunk keeps them together and splits off the charts instead.
-
-_Place and unit words in this section are requirements. They do not go into the Indicator body (chunk 2, design issue 5)._
-
-#### Requirements
-
-**Specs to draft** (all `status: draft`)
-
-| ID | Type | Settings |
-|---|---|---|
-| `income_population_cluster_tract_2010_2024` | Indicator | `measure: cluster`; `geography: tract_2020`; `builds_on: [median_household_income_tract_2024, median_household_income_tract_pct_change_2010_2024, population_count_tract_pct_change_2010_2024]` (income first: it sets the numbering); `cluster: { method: kmeans, k: 5, seed: 0, log: [median_household_income_tract_2024] }` (k provisional, Stop A question 3; tunable at Stop C); no `data`, `crosswalks`, `reliability`, `unit` or `inflation`. |
-| `map_income_population_cluster_tract_2010_2024__tract_2020` | Visualization | `indicator`: the cluster Indicator; `geography: tract_2020`; `classification: categorical`; `classes: 5` (equal to `k`); no `breaks`; `colors: Tableau10` (`d3.schemeTableau10`, Stop A question 6). `# Source note`: "Clusters are numbered, not named. Cluster membership is not tested for statistical significance." |
-
-Used unchanged: the three input Indicators and everything below them.
-
-**Computation** (Indicator body, without place names)
-1. Read each `builds_on` Indicator's `estimate` at this geography: one input per Indicator, in `builds_on` order.
-2. A unit with any blank input is not clustered. Its `estimate` is blank, and `note` lists each blank input by ID with that input's note, e.g. "median_household_income_tract_pct_change_2010_2024: 2006–2010: no matching 2010 tract".
-3. Take the natural log of each input listed in `cluster.log`. Each must have only positive values (checked at run time).
-4. Scale each input to z-scores over the clustered units: (value − mean) ÷ standard deviation, population SD (ddof 0). **No clipping or trimming: extreme values are kept** (decision 2).
-5. k-means: scikit-learn `KMeans`, `n_clusters` = `k`, `random_state` = `seed`, `n_init` = 50 (fixed in `lib/`), Lloyd algorithm.
-6. Number the clusters 1 … k in ascending order of their members' median of the first `builds_on` input (as published, before the log). Ties go by the next input.
-7. `estimate` = the cluster number. `moe`, `cv` and `reliability` are blank.
-8. The table also has one column per input, named by its Indicator ID, with that input's `estimate` as published (before log and scaling).
-
-Run-time checks in `lib/` (structural, so a failure stops the run): every cluster has at least one unit; `k` ≤ the number of clustered units; each clustered unit is nearest its own cluster's center in z-score space (k-means' defining property).
-
-**Diagnostics** (`build/clusters/<id>__<geography>__diagnostics.csv`; never published, like the matched pairs file). One row for each k from 2 to 8, with the spec's other settings: inertia, mean silhouette, stability (mean adjusted Rand index over 50 bootstrap resamples, seeded), and cluster sizes. The spec's `k` is marked. It's how the expert chooses `k`.
-
-**Manifest:** the table's and map's manifests add a `clusters` block (method, k, seed, log, units clustered and not, and for each cluster: its number, size, and the median of each input in its own unit) and a `caveats` list copied from `# Caveats`, as for `percent_change`.
-
-**Map:** clustered tracts colored by cluster number; tracts not clustered light gray (`#d9d9d9`), labelled "not clustered". Tooltip: tract name, "Cluster 3", and each input formatted by its unit and measure ("$41,743", "−12.0%"); no MOE or reliability. Legend: one row per cluster with its color, "Cluster n", number of tracts, and the median of each input: a profile to help the expert name the clusters (decision 3). Titles and labels describe what is measured; no names.
-
-**Caveats** (Indicator `# Caveats`, without place names; copied into its manifests)
-- **Clusters divide a continuous spread of units; they aren't distinct groups found in the data.** A unit near the edge of a cluster may differ little from units in the next one.
-- **Not tested for statistical significance.** The inputs have sampling error (the changes have no MOE), so membership near cluster edges may not hold. The diagnostics file reports stability.
-- Results depend on the inputs, `k`, the log, the scaling and the seed. A new input, a new snapshot or a change in which units have values can change the clusters and their numbers.
-- Each input counts equally after scaling. Inputs that measure similar things carry more weight together.
-- Extreme values are kept: one unit can form a cluster of its own, or pull a cluster's center.
-- Only units with every input have a cluster. For the change inputs, that means units matched one to one across boundary vintages.
-- Cluster numbers follow the first input's median. They are an order, not a ranking or a name.
-- Each input's own caveats apply.
-
-**Outputs** (each with its manifest)
-- `outputs/tables/income_population_cluster_tract_2010_2024__tract_2020.csv`
-- `outputs/visualizations/map_income_population_cluster_tract_2010_2024__tract_2020.html`
-- `build/clusters/income_population_cluster_tract_2010_2024__tract_2020__diagnostics.csv`
-
-**Expected size** (sanity check at Stop C, not a known-answer test; from a chat run on the current tables with scikit-learn, log income, z-scores, no clipping, `n_init` 50, seed 0)
-- 159 rows; **130 clustered**, the same 130 tracts that have an income change (they all have the other two inputs); 29 blank.
-- Diagnostics in chat (stability over 50 resamples):
-
-  | k | Silhouette | Stability | Sizes |
-  |---|---|---|---|
-  | 2 | 0.26 | 0.42 | 61, 69 |
-  | 3 | 0.27 | 0.34 | 1, 63, 66 |
-  | 4 | 0.29 | 0.57 | 1, 29, 34, 66 |
-  | 5 | 0.29 | 0.52 | 1, 15, 25, 36, 53 |
-  | 6 | 0.29 | 0.56 | 1, 8, 14, 25, 33, 49 |
-  | 7 | 0.29 | 0.58 | 1, 8, 9, 14, 20, 31, 47 |
-  | 8 | 0.31 | 0.60 | 1, 6, 10, 13, 13, 20, 23, 44 |
-
-  Silhouette near 0.3 at every k: no strong natural grouping (first caveat). Stability is lower than with clipping (0.7–0.8 in chat), the cost of keeping extreme values.
-- At k = 5, numbered by median income:
-
-  | Cluster | Tracts | Median income | Income change | Population change |
-  |---|---|---|---|---|
-  | 1 | 25 | $23,816 | −26% | −29% |
-  | 2 | 36 | $39,116 | +22% | −21% |
-  | 3 | 53 | $41,743 | −12% | −5% |
-  | 4 | 1 | $60,483 | +34% | +293% |
-  | 5 | 15 | $75,565 | +34% | −1% |
-
-- Tract `39035107701` (population change +293%) is a cluster of its own at every k from 3 to 8 (Stop A question 2).
-- Small differences in sizes from another scikit-learn version are possible; a large difference is a 🛑 stop.
-
-**Tests**
-- **Spec validation** passes for the whole project, including design issue 6's checks.
-- **`kat_008`**: the cluster Indicator at `tract_2020` for `39035107701`. Expected: 4 at k = 5, from the chat run. `tolerance: exact`. Not a trusted published value (an accepted exception to validation.md § 2, like `kat_005` and `kat_007`; Stop A question 5). It checks that extreme values are kept (with clipping, this tract joins a larger cluster), the log and scaling, and the numbering. If `k` changes at Stop C, the expected value is recomputed and recorded.
-- `kat_001`–`kat_007` still pass. Existing tables and maps stay byte-identical apart from `created` and `lib_hash`.
-- **Invocation** (run after approval, validation.md § 3):
-  - `inv_013`, clusters run. Prompt: "Group Cleveland's census tracts into types by income and population change." `expected: runs`, `spec: map_income_population_cluster_tract_2010_2024__tract_2020`. The agent reports cluster numbers only; it doesn't name, rank or describe clusters or places.
-  - `inv_014`, a characterization. Prompt: "Which census tracts are wealthy but stagnating?" `expected: not_available`, `spec: null`. No spec defines that. The agent says so, can mention the numbered cluster Indicator and map, and doesn't map clusters to "wealthy" or "stagnating" itself. It creates, drafts and fetches nothing.
-  - Existing `inv_001`–`inv_012` still pass.
-
-**Not in this chunk:** charts, including scatter plots, a cluster profile chart and 3D (6b); cluster names (a `labels` field once the expert names them); other methods (Ward, Gaussian mixture, soft membership); clipping or trimming; input weights or PCA for many inputs; a rule-based typology; a reliability flag per unit from its inputs.
-
-#### Design issues
-
-Found by checking the requirements against architecture.md, the templates and `lib/`.
-
-1. **`measure: cluster`** (§ 4.4, Indicator template). `builds_on` has two or more Indicators, each reported at this `geography`. A `cluster` block: `method` (`kmeans` only for now), `k`, `seed`, `log` (optional; inputs to log, each in `builds_on`). No `data`, `crosswalks`, `reliability`, `unit` or `inflation`; never moved through a crosswalk. Body: `# Definition`, `# Computation`, `# Caveats`.
-2. **`lib/cluster.py`** (§ 7, new row *Cluster*). Input table from `builds_on`, blank handling and notes, log, z-scores, k-means, numbering, the run-time checks, diagnostics, and per-cluster medians. Compiled code is a few lines, like a change Indicator's.
-3. **Output table** (§ 12 *Output tables*): for `cluster`, `estimate` is a whole number 1 … k, shown as "Cluster 3"; one column per input after `reliability`, named by the input's ID; `moe`, `cv`, `reliability` blank.
-4. **Build file and manifest** (§§ 8, 11): `build/clusters/` for the diagnostics file; the `clusters` block; `caveats` copied for `cluster` as for `percent_change`.
-5. **Categorical choropleth** (§ 4.5, Visualization template): `classification: categorical`, only for a `cluster` Indicator; `classes` equals its `k`; `colors` a d3 categorical scheme with at least `k` colors; no `breaks`. Legend and tooltip as in *Map* above. The agent still never chooses colors or classes.
-6. **Validator** (`lib/validate.py`, validation.md): the rules in 1 and 5; `k` from 2 to 10 (Tableau10 has 10 colors); `seed` a whole number.
-7. **Dependency** (§ 12 *Tech stack*, `pyproject.toml`, `uv.lock`): scikit-learn at a pinned version. It brings scipy, joblib and threadpoolctl. Pinning keeps the clusters reproducible (Stop A question 4).
-8. **Naming** (§ 12): a cluster Indicator is named for what it combines, then `cluster`, the unit and both years, like a change Indicator: `income_population_cluster_tract_2010_2024`.
-9. **Changing `k` or `seed`** is a spec change, so the compiled code goes stale and is recompiled and reviewed (§ 6, no change). The code is a few lines, so tuning `k` at Stop C stays cheap.
-10. **No names** (AGENTS.md rule 4, § 12 *Maps*): cluster numbers aren't names, and the agent never names, ranks or describes clusters. Names are the expert's and will go in a spec (deferred, see *Not in this chunk*).
-
-#### Stop A questions
-
-Answered 2026-10-25 with the recommended defaults. Recorded as decisions 5–10.
-
-#### Tasks
-
-1. Commit the chunk 6a plan (this roadmap) on `main`, then create `chunk/06a-tract-clusters` from `main`.
-2. Add scikit-learn with uv (pinned). Check that existing outputs are unchanged apart from `created` and `lib_hash`, and `kat_001`–`kat_007` pass.
-3. Apply design issues 1–10 (docs, templates, validator). Check again as in task 2.
-4. Draft the two specs, update each folder's `index.md`, add `kat_008`, `inv_013`, `inv_014`. 🛑 **Stop B.**
-5. Build `lib/cluster.py` and the categorical choropleth; compile the Indicator.
-6. Run validation and known-answer tests; produce the outputs and the diagnostics file; check the expected size against the chat run; set `k` with the expert. 🛑 **Stop C:** the expert reviews and approves; then the invocation tests in fresh sessions.
-7. Retro per the working method.
-
-#### Stop B notes
-
-For the expert's review at Stop B.
-
-1. **Titles.** Proposed: "Income and population clusters by census tract, 2006–2010 to 2020–2024". Changed by the expert (decision 11).
-2. **Extra dependencies.** scikit-learn 1.9.1 also brought `cloudpickle` and `narwhals`, besides scipy, joblib and threadpoolctl (design issue 7 named those three). No existing package changed version in `uv.lock`.
-3. **Categorical schemes.** The validator accepts the d3 v7.9.0 categorical schemes, with their color counts: Category10, Accent, Dark2, Observable10, Paired, Pastel1, Pastel2, Set1, Set2, Set3, Tableau10. Design issue 6 fixed `k` at 2–10 for Tableau10; a scheme with fewer colors than `classes` is an error.
-4. **Checks against task 2 and 3.** Existing tables, maps and manifests identical apart from `created`, `lib_hash` and the fingerprints built from `lib_hash`; the crime selection's GeoPackage has the same rows and geometry but a new internal write time (`gpkg_contents.last_change`), so it isn't byte-identical. `kat_001`–`kat_007` pass.
-
-#### Stop C notes
-
-For the expert's review at Stop C.
-
-1. **Results match the chat run.** 159 rows, 130 clustered (the same 130 tracts as the income change), 29 not. At k = 5, sizes 25, 36, 53, 1, 15 and every cluster median as in *Expected size*. Diagnostics: sizes and silhouette match at every k; stability within 0.03 (0.43, 0.36, 0.55, 0.53, 0.56, 0.58, 0.57 for k = 2–8). `kat_008` passes. A forced rerun reproduces the table, diagnostics and map byte for byte.
-2. **Stability**, as built: for each of 50 bootstrap resamples (units drawn with replacement, `numpy` generator seeded with `seed`), k-means is fitted on the resample and predicts every clustered unit; stability is the mean adjusted Rand index against the full fit. z-scores are from the full data. The chat run's method may differ in such details.
-3. **Choosing `k`.** `build/clusters/income_population_cluster_tract_2010_2024__tract_2020__diagnostics.csv`; sizes are listed in cluster-number order. Changing `k` is a spec change: recompile, review, and recompute `kat_008`'s expected value.
-4. **`lib/` to review.**
-   - `cluster.py` (new): input table and notes, log, z-scores, k-means (`n_init` 50, Lloyd), numbering, run-time checks, `clusters` block, diagnostics.
-   - `runner.py`: for `cluster`, writes the diagnostics file (before the known-answer tests, so it's there even if one fails) and adds `clusters` and `caveats` to the manifests. A `ValueError` from compiled code now stops the run with a message, for every Indicator (before, it was a traceback). The source note names each data source once (`dict.fromkeys`), since the cluster Indicator reaches the 2024 income table twice; other maps' notes are unchanged.
-   - `output.py`: `write_table` puts the input columns after `reliability`; `read_table` reads every column except the four text ones as numbers, so the input columns read back as numbers. Same result for existing tables.
-   - `choropleth.py`: `draw_categorical` with its own page template; the existing template is untouched, and existing maps are byte-identical.
-5. **Map.** The legend's column headers and the tooltip use each input Indicator's `title` (long, but reviewed text). Inputs are formatted by measure: "$41,743", "−12.5%", "+293.1%". The tooltip's hover wasn't exercised in the headless check; please hover a few tracts.
-6. **Existing outputs** unchanged after the `lib/` changes, apart from `created`, `lib_hash` and fingerprints; `kat_001`–`kat_007` pass.
-
-#### Decisions (expert, 2026-10-25)
-
-Carried: one Indicator per vintage (§ 4.4); changes with no MOE or significance test; caveats in manifests; the agent never chooses classes or colors, and never interprets; "take the simpler option when in doubt".
-
-From the chunk 6 brief:
-1. **k-means.** The chunk tests the capability as much as the result.
-2. **z-scores; keep extreme values** (no clipping). Outliers are of interest in themselves.
-3. **Clusters are numbered.** The expert names them later.
-4. **Split into 6a** (cluster Indicator and categorical map) **and 6b** (charts).
-
-Stop A (2026-10-25):
-5. **Log of income before z-scores:** yes. No clipping (decision 2). The log shortens the long tail of high incomes; it isn't outlier removal.
-6. **A cluster of one is accepted.** Tract `39035107701` (+293% population) forms its own cluster at every k from 3 to 8; with extreme values kept on purpose, that stands.
-7. **`k` = 5 to start.** Final at Stop C, from the diagnostics file and the map.
-8. **scikit-learn**, pinned in `pyproject.toml` and `uv.lock` (design issue 7), not k-means written in `lib/`.
-9. **Tests:** `kat_008` (tract `39035107701` in cluster 4 at k = 5, exact) as an accepted exception to validation.md § 2, like `kat_005` and `kat_007`; `inv_013` and `inv_014` as written.
-10. **Colors:** `Tableau10` (`d3.schemeTableau10`).
-
-Stop B (2026-10-25):
-11. **Specs, tests and *Stop B notes* 2–4 approved.** Both specs are titled "Census tracts clustered by income, income change, and population change". Specs stay `draft` until Stop C.
-
-Stop C (2026-10-25):
-12. **Approved as built.** `k` = 5 kept, so `kat_008` stands as written. Both specs `stable`; the cluster Indicator's code `verified`; `lib/` changes (*Stop C notes* 4) approved.
+_Chunk 6a merged 2026-10-25 (see Completed chunks). Next: 6b, outlined below; its requirements are written in chat (step 1 of the working method)._
 
 ### Chunk 6b — Charts for the tract clusters (outline)
 
@@ -294,6 +127,22 @@ Stop C (2026-10-25):
 ---
 
 ## Completed chunks
+
+### Chunk 6a — Tract clusters by income and population change (k-means)   (merged 2026-10-25)
+Delivered:
+  - Specs (all `stable`): `income_population_cluster_tract_2010_2024` (`measure: cluster`, `tract_2020`, `builds_on` 2024 income, income change, population change; `cluster: { kmeans, k 5, seed 0, log income }`) and `map_income_population_cluster_tract_2010_2024__tract_2020` (`categorical`, 5 classes, `Tableau10`). Both titled "Census tracts clustered by income, income change, and population change" (decision 11).
+  - Code (verified): the cluster Indicator, a few lines calling `lib/cluster.py`. `lib/`: `cluster.py` (new); categorical map in `choropleth.py` with its own template; runner writes diagnostics, `clusters` and `caveats`, turns a `ValueError` from compiled code into a stop, and names each source once in the source note; `output.py` input columns; validator rules for `cluster` and `categorical`. scikit-learn 1.9.1 pinned.
+  - Outputs: the cluster table (159 rows, 130 clustered; sizes 25, 36, 53, 1, 15) and map, each with a manifest; `build/clusters/…__diagnostics.csv` (k 2–8).
+  - Tests: `kat_008` (tract `39035107701` in cluster 4, exact, accepted exception) added; `kat_001`–`kat_008` pass. `inv_013`, `inv_014` added; `inv_001`–`inv_014` passed in fresh sessions after approval.
+Retro:
+  - Worked: the chat run's expected size matched exactly at k = 5 (sizes and every median) and in sizes and silhouette at every k from 2 to 8, so the build was checked against numbers before Stop C. The `builds_on` graph, staleness and `indicator_inputs` took three inputs with no change to `specs.py`, `compiled.py` or `snapshot.py`. A separate page template for the categorical map kept every existing map byte-identical. Reruns reproduce the table, diagnostics and map byte for byte. Requirements written in chat with design issues and Stop A answers made tasks 1–6 run without questions.
+  - Broke: nothing in the specs or results. The GeoPackage of the crime selection isn't byte-identical on a forced rerun (its internal write time changes); contents are. Stability differs from the chat run by up to 0.03 (bootstrap details). The first `cluster.py` passed a fake `k` to skip a check (agent's slip, fixed before review), and the first map format used d3's `%` type, which multiplies by 100 (caught before running).
+  - Agent needed correction on: the spec titles (expert's wording, decision 11). The agent removed a naming row for change Indicators it had added to § 12 beyond the design issues.
+  - Open points: clusters are numbered, not named (a `labels` field once the expert names them). One tract is a cluster of its own at k 3–8. Silhouette is about 0.29 at every k: no strong natural grouping (first caveat). `--force` still doesn't reach `builds_on` inputs. A cluster map input other than dollars, counts, percents or percent changes stops with "isn't built yet".
+Design changes:
+  - Before building (design issues 1–10): `measure: cluster` and the `cluster` block (§ 4.4, Indicator template); categorical choropleth (§ 4.5, Visualization template); Cluster helper (§ 7); `clusters` and `caveats` in manifests (§ 8); `build/clusters/` (§ 11); naming, output columns, scikit-learn (§ 12); validator and validation.md checks.
+  - In the retro: § 4.4 states how stability is computed; § 4.5 says the source note names each source once.
+  - Existing work brought in line: nothing needed. Validation clean with no warnings; existing outputs unchanged.
 
 ### Chunk 5 — Change in tract population, 2006–2010 to 2020–2024   (merged 2026-10-25)
 Delivered:
@@ -482,3 +331,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | Task 5: `lib/cluster.py`, categorical choropleth, runner and output changes; cluster Indicator compiled. Task 6: validation clean, `kat_001`–`kat_008` pass, existing outputs unchanged, expected size matches the chat run (130 of 159; k = 5 sizes and medians exact), diagnostics file and map written, reruns reproducible. | 🛑 Stop C: expert reviews `lib/` and code, hovers the map, sets `k` (*Stop C notes* 1–6), approves. Then `inv_001`–`inv_014` in fresh sessions. |
 | 2026-10-25 | Claude Code | `inv_013` prompt in a fresh session: listed specs, resolved to `map_income_population_cluster_tract_2010_2024__tract_2020`, ran it through `lib.runner` (run mode). The runner refused: both specs `draft`, cluster code unreviewed. Routing correct; no outputs, as expected before approval. | 🛑 Stop C: expert review and approval; rerun `inv_013` after approval for the `runs` result. |
 | 2026-10-25 | Claude Code | ✅ Stop C passed (decision 12): `k` = 5 kept, 2 specs `stable`, 1 code file `verified`. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the cluster map; `kat_008` passes. | 🛑 Expert runs `inv_001`–`inv_014` in fresh sessions. Then task 7 (retro). |
+| 2026-10-25 | Claude Code | Expert ran `inv_001`–`inv_014` in fresh sessions; all pass. Task 7: retro recorded, checklist updated (three or more inputs, clustering, categorical value and map, new dependency), architecture §§ 4.4–4.5 clarified, `chunk/06a-tract-clusters` merged into `main`. | Define chunk 6b (charts) in chat. |

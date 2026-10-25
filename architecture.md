@@ -248,7 +248,7 @@ A cluster Indicator groups units by several Indicators' values at once: each uni
   5. Number the clusters 1 … k in ascending order of their members' median of the first input (as published, before the log); ties go by the next input.
   6. `estimate` = the cluster number; `moe`, `cv` and `reliability` are blank. The table also carries each input's `estimate` ([§ 12](#output-tables-csv)).
 - **Run-time checks** (structural, so a failure stops the run): `k` ≤ the number of clustered units; every cluster has at least one unit; each clustered unit is nearest its own cluster's center in z-score space.
-- **Diagnostics.** `build/clusters/<id>__<geography>__diagnostics.csv`, never published: one row for each k from 2 to 8, with the spec's other settings: inertia, mean silhouette, stability (mean adjusted Rand index over 50 seeded bootstrap resamples) and cluster sizes; the spec's `k` is marked. The expert uses it to choose `k`.
+- **Diagnostics.** `build/clusters/<id>__<geography>__diagnostics.csv`, never published: one row for each k from 2 to 8, with the spec's other settings: inertia, mean silhouette, stability (mean adjusted Rand index over 50 bootstrap resamples drawn with `seed`: each resample's fit predicts every clustered unit and is compared with the full fit) and cluster sizes in cluster-number order; the spec's `k` is marked. The expert uses it to choose `k`.
 - **Changing `k`, `seed` or `log`** changes the spec, so the code is stale ([§ 6](#6-compiled-code-and-staleness)): recompile and review.
 - **Clusters are numbered, never named.** The agent doesn't name, rank or describe them (AGENTS.md rule 4). Names are the expert's and will go in a spec.
 - Its `# Caveats` are copied into its output manifests ([§ 8](#8-manifests)).
@@ -270,7 +270,7 @@ One map. **`map`** (optional) sets the kind: `choropleth` (the default) or `hexb
 
 - Classification (`classification`, `classes`, `breaks`) and `colors` are always set in the spec, **never chosen by the agent**.
 - Output: a self-contained HTML file using D3 v7 (pinned version), with its data embedded.
-- The page's source note lists the Resource and Geography titles (for an Indicator with only `builds_on`, those of its inputs; plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.".
+- The page's source note lists the Resource and Geography titles (for an Indicator with only `builds_on`, those of its inputs; plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.". A source reached through more than one input is named once.
 
 **Choropleth.** Its `indicator` is not a `points` Indicator.
 - **`indicator`** sets the color. **`geography`** must be one the Indicator is reported at.
