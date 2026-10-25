@@ -122,7 +122,7 @@ Fields are defined in [templates/](templates/). The lists below show only what e
 | **Resource** | One API, file, or dataset | `specs/resources/` | `resource`, `auth`, `datasets` |
 | **Geography** | One boundary file | `specs/geographies/` | `resource`, `id_field`, `name_field`, `within`, `within_rule`, `census_unit` |
 | **Crosswalk** | Moves data between two Geographies | `specs/crosswalks/` | `from`, `to`, `method`, `weights`, `weights_source`, `min_overlap`, `fields` |
-| **Indicator** | One measure, or a reviewed selection of points | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability`, `window` |
+| **Indicator** | One measure, or a reviewed selection of points | `specs/indicators/` | `measure`, `unit`, `geography`, `crosswalks`, `data`, `builds_on`, `reliability`, `window`, `inflation` |
 | **Visualization** | One map | `specs/visualizations/` | `map`, `indicator`, `geography`, `classification`, `classes`, `breaks`, `colors`, `also_show`, `hex_size_m` |
 
 ### Separation of concerns
@@ -207,12 +207,14 @@ One measure, such as "% of households with housing cost burden", or a reviewed s
 
 - **`geography`** is where it's calculated, usually `bg_2020`. It's also reported there.
 - **`crosswalks`** lists the extra geographies it's reported at. Each crosswalk's `to` is an output geography, and its `from` must equal the Indicator's `geography`.
-- **`data`** names exactly what to pull: Resource, dataset, vintage, and each field with its plain meaning. For Census data, the matching `_M` (margin of error) field is pulled automatically for every `_E` field. For a file Resource (no `datasets`), an entry has `resource` and `fields` only, and `lib/` reads only those fields.
+- **`data`** names exactly what to pull (an Indicator has `data`, `builds_on`, or both): Resource, dataset, vintage, and each field with its plain meaning. For Census data, the matching `_M` (margin of error) field is pulled automatically for every `_E` field. For a file Resource (no `datasets`), an entry has `resource` and `fields` only, and `lib/` reads only those fields.
 - **`measure`** decides how values move to other geographies:
   - `percent`, `rate`, `count`: move the counts, then compute ([§ 12](#12-conventions)).
   - `median`, `index`: with crosswalks, the body needs an `# Aggregation` section explaining a valid method.
+  - `percent_change`: the change from one Indicator's value to another's, in percent ([below](#vintages-and-change-over-time)). Never moved through a crosswalk.
 - **`unit`** (optional): what the values are in, for display. `count` (the default) or `dollars`. Percentages come from `measure: percent`, not `unit`.
 - **`reliability`** (survey data only) sets the CV threshold, and whether low-reliability values are flagged or suppressed.
+- **`builds_on`** (optional) lists Indicators whose results this one uses. Each must be reported at this Indicator's `geography`. The runner runs them first, as dependencies; compiled code reads their tables at this `geography` with `ctx.indicator(id)` (from `outputs/tables/`, never recomputed). Their snapshots count as this Indicator's data, so a new snapshot below reruns it.
 - **Body:** `# Definition` (universe, numerator, denominator, exclusions), `# Computation` (steps), `# Caveats`. Add `# Point rules` for point data: outside-city points, boundary points, accepted geocodes, and denominator.
 - **The body is about the measure, not the place** ([Separation of concerns](#separation-of-concerns)). Steps that are the same for every Indicator are done by `lib/` and aren't repeated: pulling the fields for the geography's units, joining them to the units (§ 12), applying the listed crosswalks, and computing reliability at every geography. The compiled code returns one table at the Indicator's `geography`; the runner does the rest.
 
@@ -223,6 +225,10 @@ One Indicator has one vintage, fixed in its `data`. The year is **never a run-ti
 - **Each vintage is its own Indicator**, with the ACS end year at the end of its ID ([§ 12](#naming)), e.g. `median_household_income_tract_2010` beside `median_household_income_tract_2024`. It reports published values in that year's dollars; inflation adjustment belongs to the comparison.
 - **The same published value at a second Census unit** is its own Indicator too, because a median can't move from block groups to tracts. For a unit other than the block group, the unit goes before the year: `median_household_income_tract_2024`. The block group is the default unit and isn't named (`median_household_income_2024`). Decided in chunk 4a; an alternative is in [§ 13](#13-deferred) (*Published values at other units*).
 - **A change Indicator** `builds_on` two vintage Indicators reported at the same geography. Its ID names both years, e.g. `median_household_income_tract_pct_change_2010_2024`.
+  - `measure: percent_change`; `builds_on` has exactly two Indicators, **start first, then end**. No `data`, `crosswalks`, `reliability` or `unit`.
+  - `estimate` = (end ÷ start − 1) × 100. **No MOE for the change** (decided in chunk 4b, a proof of concept): `moe`, `cv` and `reliability` are blank, and the table carries the inputs in `start`, `start_moe`, `end`, `end_moe` ([§ 12](#output-tables-csv)). If either input is blank, so is the change, and `note` says which input and why.
+  - **`inflation`** (optional): `{ index, from: { year, value }, to: { year, value }, source, retrieved }`, both values from the same published table. `start` and `start_moe` are multiplied by `to.value ÷ from.value`, so both inputs are in the end year's dollars. The index values are written in the spec with their source instead of coming from a Resource: the one exception to AGENTS.md rule 3 (expert's decision, chunk 4b).
+  - Its `# Caveats` are copied into its output manifests ([§ 8](#8-manifests)).
 - **The change math lives in `lib/`**, so a change Indicator's compiled code is a few lines. A new pair of years is a copied spec with new `builds_on` and a quick review; the agent may draft it from a prompt in author mode.
 - When a third vintage of one measure is needed, revisit *Non-expert parameters* ([§ 13](#13-deferred)).
 
@@ -243,11 +249,12 @@ One map. **`map`** (optional) sets the kind: `choropleth` (the default) or `hexb
 
 - Classification (`classification`, `classes`, `breaks`) and `colors` are always set in the spec, **never chosen by the agent**.
 - Output: a self-contained HTML file using D3 v7 (pinned version), with its data embedded.
-- The page's source note lists the Resource and Geography titles (plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.".
+- The page's source note lists the Resource and Geography titles (for an Indicator with only `builds_on`, those of its inputs; plus "Margins of error at 90% confidence." when any data is from the Census), then the spec's `# Source note` text unless it is "None.".
 
 **Choropleth.** Its `indicator` is not a `points` Indicator.
 - **`indicator`** sets the color. **`geography`** must be one the Indicator is reported at.
 - The tooltip shows the unit's name, the estimate, the margin of error, and the reliability. It also shows any `also_show` Indicators.
+- **`percent_change`:** the tooltip and legend show a signed percent ("+12.3%"); the tooltip adds `start` and `end` in dollars and leaves out the blank MOE and reliability. It's drawn with `manual` breaks around 0 and a diverging scheme.
 
 **Hexbin heat map.** Its `indicator` is a `points` Indicator, and `geography` is that Indicator's `geography`.
 - **`hex_size_m`** (required): hex width across flats, in metres, at least the privacy floor ([§ 12](#privacy)).
@@ -327,11 +334,12 @@ Compiled code is tracked in git.
 | Helper | What it does |
 |---|---|
 | Fetch & load | Fetch a request from a Resource into a snapshot; load snapshots and Geographies; read only the named fields of a file Resource |
-| Runner | Walk the graph from a requested spec, check staleness, fetch, compute, apply crosswalks and reliability, test, and write outputs ([§ 2](#invocation)) |
+| Runner | Walk the graph from a requested spec, check staleness, fetch, run `builds_on` Indicators first, compute, apply crosswalks and reliability, test, and write outputs ([§ 2](#invocation)) |
 | Selection | For a `points` Indicator: apply the `window` in local dates, then write the compiled code's points and exclusion counts to `build/points/` |
 | Build crosswalk | Build a weights table using one of the allowed methods, or the pairs table for `matched` |
 | Apply crosswalk | Move counts and their margins of error between geographies, or copy matched values unchanged |
 | Rate from counts | Percentage or rate from numerator and denominator counts, with margin of error |
+| Change | Percent change from a start and an end Indicator's tables, with an inflation factor; carries the inputs and their MOEs |
 | Margin-of-error math | Census Bureau formulas for sums, ratios, and proportions |
 | Reliability | Compute CV and flag or suppress values per the Indicator's settings |
 | Point aggregation | Count points within polygons, following the Indicator's point rules |
@@ -369,6 +377,10 @@ known_answer_tests:
 ```
 
 The manifest also records `lib_hash` (one hash of everything in `lib/`) and a `fingerprint` of all the hashes above. The runner compares them with the current state to decide whether the output is stale.
+
+An Indicator that `builds_on` others lists their snapshots in `data` (taken from their manifests) and adds an `indicator_inputs` block: each input table's path and fingerprint. The output is stale when an input's fingerprint changes, like a map's `indicator_output`.
+
+A `percent_change` Indicator's table manifest, and its map's manifest, also have a `caveats` list: the bullets of its `# Caveats`, copied. Other Indicators keep their caveats in the spec only (chunk 4b).
 
 A selection's manifest (`build/points/…gpkg.manifest.yaml`) works the same way and adds an `excluded` block: each reason, with the number of rows it removed.
 
@@ -524,9 +536,10 @@ cleveland-analysis/
 | `moe`, `cv` | Margin of error and CV (blank if not applicable) |
 | `reliability` | `ok` or `low` |
 | `numerator`, `numerator_moe`, `denominator`, `denominator_moe` | For percentages and rates |
+| `start`, `start_moe`, `end`, `end_moe` | For `percent_change` only, after `reliability`: the two inputs, `start` in the end year's dollars |
 | `note` | Anything unusual, e.g. "suppressed: low reliability" |
 
-- Values are stored at full precision and rounded only for display: percentages to 1 decimal place, counts and dollars to whole numbers (dollars with a `$`).
+- Values are stored at full precision and rounded only for display: percentages to 1 decimal place (a percent change with its sign, e.g. "+12.3%"), counts and dollars to whole numbers (dollars with a `$`).
 - **Missing or suppressed values are left blank, never 0**, with the reason in `note`.
 - **Compute with flagged uncertainty rather than stop.** When some inputs are blank, compute from the ones that have values and say what was left out in `note`. Stop only for structural problems (a missing unit, a broken join, a spec that doesn't say what to do), never because data is incomplete. (Expert's principle, chunk 2.)
 - **Not published at a level:** the Census Data API returns `null` for a field that isn't published at a geography's `census_unit`. If every unit is `null`, the run stops (structural). If only some are, those values are blank with "not published" in `note`.
