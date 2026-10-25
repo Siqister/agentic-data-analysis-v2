@@ -96,7 +96,7 @@ geography: tract_2020
 unit: "39035197400"              # Census Tract 1974 (2020), matched to 2010 Census Tract 1063; the kat_003 tract
 expected: -0.11
 tolerance: absolute 0.01
-source: Computed by hand from the published counts, 3809 (ACS 2006–2010, tract 106300) and 3805 (ACS 2020–2024, tract 197400), from the Census Data API (2026-10-25); to be checked against population_count_tract_2010__tract_2020.csv and population_count_tract_2024__tract_2020.csv once built
+source: Computed by hand from population_count_tract_2010__tract_2020.csv (3809) and population_count_tract_2024__tract_2020.csv (3805), the published counts from the Census Data API (2026-10-25)
 ```
 
 **Not a trusted published value** (decision 5, chunk 5; an accepted exception to [validation.md § 2](validation.md#2-known-answer-tests), like `kat_005`). It checks the joins, the order of start and end, and the arithmetic with no inflation factor: 3805 ÷ 3809 − 1 = −0.1050%. Swapping start and end gives +0.1051%, outside the tolerance. The start comes through the matched crosswalk, so the test covers that path too. If `min_overlap` rises above 0.83, this tract has no value and the test must be replaced, like `kat_003`.

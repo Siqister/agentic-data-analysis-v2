@@ -119,7 +119,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/05-tract-population-change`
 
-**Status:** ✅ Stop A passed 2026-10-25. Tasks 1–4 done in Claude Code. 🛑 **Stop B:** the expert reviews the four draft specs, `kat_006`, `kat_007`, `inv_011`, `inv_012`, and the *Stop B notes* below. Next: task 5.
+**Status:** ✅ Stop A and Stop B passed 2026-10-25. Tasks 5–6 done. 🛑 **Stop C:** the expert reviews the code, `lib/` changes, outputs and the *Stop C notes* below, tunes the breaks, and approves. Then invocation tests in fresh sessions.
 
 **Exercises (capability checklist):** no new items. Extends `matched` (first count), `percent_change` (no `inflation`, `unit: count`) and the change choropleth (count formatting).
 
@@ -212,6 +212,18 @@ Questions (recommendation first):
 3. **Titles** name the unit, like the income tract specs: "Total population by census tract, 2006–2010" etc. The block group count keeps "Total population, 2020–2024". Recommend keep.
 4. **`population_count_tract_2010` caveats:** sample/MOE, controls of the time, matched by land area (people, not households), unmatched units blank, counts reflect size. Left out the income spec's coding and too-few-cases caveats, which don't apply to B01003.
 
+#### Stop C notes
+
+Results of tasks 5–6 (2026-10-25):
+- **Code:** `population_count_tract_2010.py` and `population_count_tract_2024.py` have `population_count_2024.py`'s reviewed body (only the header and docstring differ). `population_count_tract_pct_change_2010_2024.py` is the income change code without the inflation step; it reads `inflation` with `.get`.
+- **`lib/`** (needs review): `choropleth.draw` takes `inflation`; the change tooltip formats `start` and `end` by the inputs' unit (`dollars` or `count`; another unit stops with "isn't built yet") and says "Start, in end-year dollars" only with `inflation`. `runner` passes a change map the first input's unit. The count map's tooltip reads "Start: 3,809", "End: 3,805".
+- **Tests:** validation 0 errors (warnings only for draft specs and unverified code); `kat_001`–`kat_007` pass (`kat_006` 3,809 exact; `kat_007` −0.105). Every existing table, map and build file is byte-identical, including the income change map; manifests differ only in `created`, `lib_hash` and `fingerprint`.
+- **Expected size:** matches. 177 rows at `tract_2010`; 159 at `tract_2020` for each other table; 136 values for the 2006–2010 count at `tract_2020`; **134** for the change (23 "no matching 2010 tract", 2 "estimate is 0"). In the change table, `start` equals the 2006–2010 table and `end` the 2020–2024 table for every unit. The 2020–2024 tract sum is 366,340, the same as the block group city total (the plan expected roughly equal).
+
+Questions:
+1. **Breaks** (decision 3, tunable now). Tracts per class, lowest to highest, of 134: 45, 11, 7, 16, 12, 13, 8, 10, 4, 8. Range −65.1% to +293.1%, median −8.6%. The bottom class (below −20%) holds 45. Keep, or widen the outer breaks (e.g. −40, −30, −20, −10, 0, +10, +20, +30, +40)?
+2. **Approval:** set the four specs `stable` and mark the three code files `verified`.
+
 #### Decisions (expert, 2026-10-25)
 
 Carried from chunks 4a–4b: one Indicator per vintage (§ 4.4); the tract unit before the year in IDs; `matched` at `min_overlap` 0.80; `percent_change` with no MOE or significance test; caveats in the change Indicator's manifests; "take the simpler option when in doubt".
@@ -224,6 +236,9 @@ Stop A (2026-10-25):
 3. **Change map:** yes. Manual breaks at −20, −15, −10, −5, 0, +5, +10, +15, +20 % (10 classes), `RdBu`, red for decline to blue for increase. Tunable at Stop C.
 4. **Counts through the `matched` crosswalk at `min_overlap` 0.80:** accepted, with the land-area caveat. No higher threshold, no `population_weighted` crosswalk.
 5. **Known-answer tests:** `kat_006` (published, exact) and `kat_007` (by hand, an accepted exception to validation.md § 2). Not answered separately; taken as approved with Stop A, as recommended.
+
+Stop B (2026-10-25):
+6. **Specs approved for compiling**; Stop B notes 1–4 accepted (134 changes; keep `kat_007`; titles name the unit; the 2006–2010 count's caveats). The change Indicator names no `crosswalks`: its inputs are already at `tract_2020`, a percent change is never moved through a crosswalk (§ 4.4), and the crosswalk reaches its manifests through the graph.
 
 ---
 
@@ -390,3 +405,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | Wrote chunk 5 requirements into Current chunk: tract population 2006–2010 and 2020–2024 and their percent change on 2020 tracts (three Indicators, optional change map), design issues 1–3, Stop A questions 1–3, `kat_006`, `kat_007`, `inv_011`, `inv_012`. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 5 requirements and design issues 1–3. Decisions 3–5: change map with breaks ±5/10/15/20 % (10 classes, `RdBu`); counts through the 0.80 `matched` crosswalk accepted; `kat_006` and `kat_007` as recommended. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (source check). Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Chunk 5 tasks 1–4: plan committed, branch created; source check passed (B01003 at tract level, 2010 and 2024); design issues 1–3 applied, existing outputs unchanged, `kat_001`–`kat_005` pass; three Indicators and the change map drafted; `kat_006` (3,809 ± 499), `kat_007` (−0.11), `inv_011`, `inv_012` added. | 🛑 Stop B: expert reviews specs and *Stop B notes* questions 1–4. Then task 5. |
+| 2026-10-25 | Claude Code | Stop B passed (decision 6). Task 5: three Indicators compiled; change tooltip formats start and end by the inputs' unit. Task 6: validation clean, `kat_001`–`kat_007` pass, existing outputs byte-identical, expected size matches (136 and 134 of 159). | 🛑 Stop C: expert reviews code and `lib/`, tunes breaks (*Stop C notes* 1), approves. Then invocation tests in fresh sessions. |
