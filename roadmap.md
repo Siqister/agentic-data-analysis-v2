@@ -119,7 +119,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/06a-tract-clusters`
 
-**Status:** ✅ Stop A passed 2026-10-25 (decisions 5–10). ✅ Stop B passed 2026-10-25 (decision 11). Tasks 5–6 done. 🛑 **Stop C:** the expert reviews `lib/`, the compiled code and the outputs, sets `k` (*Stop C notes*), and approves; then the invocation tests in fresh sessions.
+**Status:** ✅ Stop A passed 2026-10-25 (decisions 5–10). ✅ Stop B passed 2026-10-25 (decision 11). Tasks 5–6 done. ✅ Stop C passed 2026-10-25 (decision 12). 🛑 Next: the expert runs `inv_001`–`inv_014` in fresh sessions; then task 7 (retro).
 
 **Exercises (capability checklist):** new items: an Indicator built on three or more Indicators; clustering (`measure: cluster`, k-means) with a diagnostics build file; a categorical value; a categorical choropleth; a new third-party dependency. That's more than one new kind of capability. They come as one unit (a cluster Indicator needs a categorical map to be seen), so the chunk keeps them together and splits off the charts instead.
 
@@ -281,6 +281,9 @@ Stop A (2026-10-25):
 
 Stop B (2026-10-25):
 11. **Specs, tests and *Stop B notes* 2–4 approved.** Both specs are titled "Census tracts clustered by income, income change, and population change". Specs stay `draft` until Stop C.
+
+Stop C (2026-10-25):
+12. **Approved as built.** `k` = 5 kept, so `kat_008` stands as written. Both specs `stable`; the cluster Indicator's code `verified`; `lib/` changes (*Stop C notes* 4) approved.
 
 ### Chunk 6b — Charts for the tract clusters (outline)
 
@@ -477,3 +480,5 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Claude Code | Task 1: plan committed on `main`, branch `chunk/06a-tract-clusters`. Task 2: scikit-learn 1.9.1 pinned. Task 3: design issues 1–10 in architecture.md, templates, validation.md and `lib/validate.py` (new rules checked against bad specs). Existing outputs unchanged apart from `created`, `lib_hash`, fingerprints (and the GeoPackage's write time); `kat_001`–`kat_007` pass. Task 4: two specs drafted, indexes, `kat_008`, `inv_013`, `inv_014`. Validation: only the missing compiled code (task 5). | 🛑 Stop B: expert reviews specs, tests and *Stop B notes* 1–4. Then task 5 (`lib/cluster.py`, categorical choropleth, compile). |
 | 2026-10-25 | Claude Code | ✅ Stop B passed (decision 11): both specs retitled "Census tracts clustered by income, income change, and population change"; everything else approved. | Task 5: `lib/cluster.py`, categorical choropleth, compile. |
 | 2026-10-25 | Claude Code | Task 5: `lib/cluster.py`, categorical choropleth, runner and output changes; cluster Indicator compiled. Task 6: validation clean, `kat_001`–`kat_008` pass, existing outputs unchanged, expected size matches the chat run (130 of 159; k = 5 sizes and medians exact), diagnostics file and map written, reruns reproducible. | 🛑 Stop C: expert reviews `lib/` and code, hovers the map, sets `k` (*Stop C notes* 1–6), approves. Then `inv_001`–`inv_014` in fresh sessions. |
+| 2026-10-25 | Claude Code | `inv_013` prompt in a fresh session: listed specs, resolved to `map_income_population_cluster_tract_2010_2024__tract_2020`, ran it through `lib.runner` (run mode). The runner refused: both specs `draft`, cluster code unreviewed. Routing correct; no outputs, as expected before approval. | 🛑 Stop C: expert review and approval; rerun `inv_013` after approval for the `runs` result. |
+| 2026-10-25 | Claude Code | ✅ Stop C passed (decision 12): `k` = 5 kept, 2 specs `stable`, 1 code file `verified`. Validation 0 errors, 0 warnings; manifests refreshed; run mode runs the cluster map; `kat_008` passes. | 🛑 Expert runs `inv_001`–`inv_014` in fresh sessions. Then task 7 (retro). |

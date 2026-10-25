@@ -2,7 +2,7 @@
 type: Indicator
 title: Census tracts clustered by income, income change, and population change
 description: k-means cluster number from 2020–2024 median household income, its percent change from 2006–2010, and the percent change in population over the same periods.
-status: draft
+status: stable
 tags: [demographics, income, change, cluster]
 
 measure: cluster

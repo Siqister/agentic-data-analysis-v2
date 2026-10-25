@@ -2,7 +2,7 @@
 type: Visualization
 title: Census tracts clustered by income, income change, and population change
 description: Categorical choropleth of k-means clusters from median household income and the change in income and population, on 2020 census tracts in Cleveland.
-status: draft
+status: stable
 
 indicator: income_population_cluster_tract_2010_2024
 geography: tract_2020

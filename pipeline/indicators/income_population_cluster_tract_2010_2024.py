@@ -1,6 +1,7 @@
 # spec: specs/indicators/income_population_cluster_tract_2010_2024.md
 # spec_hash: sha256:11b9520e86f61c06b0ae69673edbbb23b666e8a8961e20f7259480ca7ab2bdfe
 # generated: { by: claude-code, at: 2026-10-25T12:57:00-04:00 }
+# verified: { by: human:siqi, at: 2026-10-25T13:04:06-04:00 }
 """k-means clusters from median household income and the change in income and population.
 Steps follow the spec's # Computation; the log, scaling, k-means, numbering, notes and run-time
 checks are in lib/cluster.py.
