@@ -10,5 +10,5 @@ Every measure we calculate, and every selection of points.
 * [Total population by census tract, 2020–2024](population_count_tract_2024.md) - Number of people, from the ACS 2020–2024 5-year estimates.
 * [Total population by census tract, 2006–2010](population_count_tract_2010.md) - Number of people, from the ACS 2006–2010 5-year estimates.
 * [Change in total population by census tract, 2006–2010 to 2020–2024 (%)](population_count_tract_pct_change_2010_2024.md) - Percent change in the number of people from the ACS 2006–2010 to the 2020–2024 5-year estimates.
-* [Income and population clusters by census tract, 2006–2010 to 2020–2024](income_population_cluster_tract_2010_2024.md) - k-means cluster number from 2020–2024 median household income, its percent change from 2006–2010, and the percent change in population over the same periods.
+* [Census tracts clustered by income, income change, and population change](income_population_cluster_tract_2010_2024.md) - k-means cluster number from 2020–2024 median household income, its percent change from 2006–2010, and the percent change in population over the same periods.
 * [Reported crime incidents (NIBRS Group A)](points_reported_crime_incidents.md) - Locations of reported crime incidents with at least one NIBRS Group A offense, one point per incident, in a set time window.

@@ -119,7 +119,7 @@ Which parts of the design have been exercised end to end. ☐ not yet · ☑ tes
 
 **Branch:** `chunk/06a-tract-clusters`
 
-**Status:** ✅ Stop A passed 2026-10-25 (decisions 5–10). Tasks 1–4 done. 🛑 **Stop B:** the expert reviews the two draft specs, `kat_008`, `inv_013`, `inv_014`, and *Stop B notes*.
+**Status:** ✅ Stop A passed 2026-10-25 (decisions 5–10). ✅ Stop B passed 2026-10-25 (decision 11). Next: task 5.
 
 **Exercises (capability checklist):** new items: an Indicator built on three or more Indicators; clustering (`measure: cluster`, k-means) with a diagnostics build file; a categorical value; a categorical choropleth; a new third-party dependency. That's more than one new kind of capability. They come as one unit (a cluster Indicator needs a categorical map to be seen), so the chunk keeps them together and splits off the charts instead.
 
@@ -241,7 +241,7 @@ Answered 2026-10-25 with the recommended defaults. Recorded as decisions 5–10.
 
 For the expert's review at Stop B.
 
-1. **Titles.** Both specs: "Income and population clusters by census tract, 2006–2010 to 2020–2024", mirroring the ID and the "by census tract" pattern of the other tract titles. It describes what is combined, not what the clusters show.
+1. **Titles.** Proposed: "Income and population clusters by census tract, 2006–2010 to 2020–2024". Changed by the expert (decision 11).
 2. **Extra dependencies.** scikit-learn 1.9.1 also brought `cloudpickle` and `narwhals`, besides scipy, joblib and threadpoolctl (design issue 7 named those three). No existing package changed version in `uv.lock`.
 3. **Categorical schemes.** The validator accepts the d3 v7.9.0 categorical schemes, with their color counts: Category10, Accent, Dark2, Observable10, Paired, Pastel1, Pastel2, Set1, Set2, Set3, Tableau10. Design issue 6 fixed `k` at 2–10 for Tableau10; a scheme with fewer colors than `classes` is an error.
 4. **Checks against task 2 and 3.** Existing tables, maps and manifests identical apart from `created`, `lib_hash` and the fingerprints built from `lib_hash`; the crime selection's GeoPackage has the same rows and geometry but a new internal write time (`gpkg_contents.last_change`), so it isn't byte-identical. `kat_001`–`kat_007` pass.
@@ -263,6 +263,9 @@ Stop A (2026-10-25):
 8. **scikit-learn**, pinned in `pyproject.toml` and `uv.lock` (design issue 7), not k-means written in `lib/`.
 9. **Tests:** `kat_008` (tract `39035107701` in cluster 4 at k = 5, exact) as an accepted exception to validation.md § 2, like `kat_005` and `kat_007`; `inv_013` and `inv_014` as written.
 10. **Colors:** `Tableau10` (`d3.schemeTableau10`).
+
+Stop B (2026-10-25):
+11. **Specs, tests and *Stop B notes* 2–4 approved.** Both specs are titled "Census tracts clustered by income, income change, and population change". Specs stay `draft` until Stop C.
 
 ### Chunk 6b — Charts for the tract clusters (outline)
 
@@ -457,3 +460,4 @@ Design changes: what changed in architecture.md, and what existing work was upda
 | 2026-10-25 | Chat | Defined chunk 6 (tract clusters by income and population change). Decisions 1–4: k-means, z-scores with extreme values kept, numbered clusters, split into 6a (cluster Indicator, categorical map) and 6b (charts). Wrote 6a into Current chunk: specs, computation, diagnostics, caveats, expected size from a chat run, design issues 1–10, Stop A questions 1–6, `kat_008`, `inv_013`, `inv_014`; 6b outlined. | 🛑 Stop A: expert approves requirements and design issues, answers Stop A questions. Then Claude Code: task 1. |
 | 2026-10-25 | Chat | ✅ Stop A passed: expert approved chunk 6a requirements and design issues 1–10. Decisions 5–10, all as recommended: log income, no clipping; a one-tract cluster accepted; k = 5 to start; scikit-learn; `kat_008`, `inv_013`, `inv_014` as written; `Tableau10`. | Claude Code: task 1 (commit the plan on `main`, create the branch), then task 2 (add scikit-learn). Stop B after specs are drafted. |
 | 2026-10-25 | Claude Code | Task 1: plan committed on `main`, branch `chunk/06a-tract-clusters`. Task 2: scikit-learn 1.9.1 pinned. Task 3: design issues 1–10 in architecture.md, templates, validation.md and `lib/validate.py` (new rules checked against bad specs). Existing outputs unchanged apart from `created`, `lib_hash`, fingerprints (and the GeoPackage's write time); `kat_001`–`kat_007` pass. Task 4: two specs drafted, indexes, `kat_008`, `inv_013`, `inv_014`. Validation: only the missing compiled code (task 5). | 🛑 Stop B: expert reviews specs, tests and *Stop B notes* 1–4. Then task 5 (`lib/cluster.py`, categorical choropleth, compile). |
+| 2026-10-25 | Claude Code | ✅ Stop B passed (decision 11): both specs retitled "Census tracts clustered by income, income change, and population change"; everything else approved. | Task 5: `lib/cluster.py`, categorical choropleth, compile. |
